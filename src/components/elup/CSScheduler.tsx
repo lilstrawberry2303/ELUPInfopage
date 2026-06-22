@@ -719,6 +719,18 @@ function ScheduleDialog({
                   </Select>
                 </div>
               </div>
+              {date && (() => {
+                const dmy = fmtDmy(date);
+                const bd = elupState.blockedDates?.find(
+                  (b) => b.date === dmy && (b.type === "both" || b.type === mode),
+                );
+                return bd ? (
+                  <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    🚫 This date is blocked for {bd.type === "both" ? "CS & CW" : bd.type}
+                    {bd.reason ? ` — ${bd.reason}` : ""}
+                  </div>
+                ) : null;
+              })()}
               {clash && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   ⚠ Another {mode} appointment overlaps with this slot. Check the Day Timetable.

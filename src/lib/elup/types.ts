@@ -136,3 +136,10 @@ export interface CustomSurveyField {
   type: "text" | "checkbox" | "checkbox_group";
   options?: string[];
 }
+
+export interface BlockedDate {
+  id: string;
+  date: string; // "DD/MM/YY"
+  reason: string;
+  type: "CS" | "CW" | "both";
+}

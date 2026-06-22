@@ -6,8 +6,8 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig } from "@/lib/firebase";
-import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup } from "./types";
+import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates } from "@/lib/firebase";
+import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate } from "./types";
 
 // ---- Helpers ----
 function slugify(s: string): string {
@@ -50,6 +50,7 @@ interface State {
   }>;
   customSurveyFields: CustomSurveyField[];
   hiddenSurveyGroups: DefaultSurveyGroup[];
+  blockedDates: BlockedDate[];
   loading: boolean;
 }
 
@@ -71,7 +72,9 @@ type Action =
   | { type: "DELETE_BLOCK"; blockId: string }
   | { type: "ADD_SURVEY_FIELD"; field: CustomSurveyField }
   | { type: "DELETE_SURVEY_FIELD"; id: string }
-  | { type: "TOGGLE_SURVEY_GROUP"; group: DefaultSurveyGroup };
+  | { type: "TOGGLE_SURVEY_GROUP"; group: DefaultSurveyGroup }
+  | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
+  | { type: "REMOVE_BLOCKED_DATE"; id: string };
 
 // ---- Local-only UI state (never touches Firestore) ----
 interface LocalState {
@@ -80,6 +83,7 @@ interface LocalState {
   chartView: "CS" | "CW";
   customSurveyFields: CustomSurveyField[];
   hiddenSurveyGroups: DefaultSurveyGroup[];
+  blockedDates: BlockedDate[];
 }
 
 type LocalAction =
@@ -89,7 +93,10 @@ type LocalAction =
   | { type: "ADD_SURVEY_FIELD"; field: CustomSurveyField }
   | { type: "DELETE_SURVEY_FIELD"; id: string }
   | { type: "TOGGLE_SURVEY_GROUP"; group: DefaultSurveyGroup }
-  | { type: "SET_SURVEY_CONFIG"; customSurveyFields: CustomSurveyField[]; hiddenSurveyGroups: DefaultSurveyGroup[] };
+  | { type: "SET_SURVEY_CONFIG"; customSurveyFields: CustomSurveyField[]; hiddenSurveyGroups: DefaultSurveyGroup[] }
+  | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
+  | { type: "REMOVE_BLOCKED_DATE"; id: string }
+  | { type: "SET_BLOCKED_DATES"; dates: BlockedDate[] };
 
 function localReducer(state: LocalState, action: LocalAction): LocalState {
   switch (action.type) {
@@ -108,6 +115,12 @@ function localReducer(state: LocalState, action: LocalAction): LocalState {
       };
     case "SET_SURVEY_CONFIG":
       return { ...state, customSurveyFields: action.customSurveyFields, hiddenSurveyGroups: action.hiddenSurveyGroups };
+    case "ADD_BLOCKED_DATE":
+      return { ...state, blockedDates: [...state.blockedDates, action.date] };
+    case "REMOVE_BLOCKED_DATE":
+      return { ...state, blockedDates: state.blockedDates.filter((d) => d.id !== action.id) };
+    case "SET_BLOCKED_DATES":
+      return { ...state, blockedDates: action.dates };
   }
 }
 
@@ -132,6 +145,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
     chartView: "CS",
     customSurveyFields: [],
     hiddenSurveyGroups: [],
+    blockedDates: [],
   });
 
   // ---- Firestore reactive state ----
@@ -221,6 +235,20 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       },
     );
 
+    const unsubBlockedDates = onSnapshot(
+      doc(db(), "config", "blockedDates"),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          localDispatch({
+            type: "SET_BLOCKED_DATES",
+            dates: Array.isArray(d.dates) ? d.dates as BlockedDate[] : [],
+          });
+        }
+      },
+      (err) => console.warn("[elup] blockedDates listener:", err),
+    );
+
     const unsubBlocks = onSnapshot(
       collectionGroup(db(), "blocks"),
       (snap) => {
@@ -281,7 +309,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       (err) => console.error("[elup] users listener:", err),
     );
 
-    return () => { unsubSurveyConfig(); unsubBlocks(); unsubUnits(); unsubUsers(); };
+    return () => { unsubSurveyConfig(); unsubBlockedDates(); unsubBlocks(); unsubUnits(); unsubUsers(); };
   }, []);
 
   // ---- Utility functions (exposed in context value) ----
@@ -351,6 +379,19 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               ? cur.hiddenSurveyGroups.filter((g) => g !== action.group)
               : [...cur.hiddenSurveyGroups, action.group];
             saveSurveyConfig(cur.customSurveyFields, newHidden).catch(() => {});
+            break;
+          }
+
+          case "ADD_BLOCKED_DATE": {
+            localDispatch(action as LocalAction);
+            const curBd = localRef.current;
+            saveBlockedDates([...curBd.blockedDates, action.date]).catch(() => {});
+            break;
+          }
+          case "REMOVE_BLOCKED_DATE": {
+            localDispatch(action as LocalAction);
+            const curBdr = localRef.current;
+            saveBlockedDates(curBdr.blockedDates.filter((d) => d.id !== action.id)).catch(() => {});
             break;
           }
 
@@ -745,6 +786,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       optOutRequests,
       customSurveyFields: local.customSurveyFields,
       hiddenSurveyGroups: local.hiddenSurveyGroups,
+      blockedDates: local.blockedDates,
       loading,
     }),
     [local, blocks, accounts, optOutRequests, loading],

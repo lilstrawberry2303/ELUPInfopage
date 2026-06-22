@@ -232,3 +232,12 @@ export async function loadSurveyConfig(): Promise<{
   } catch { /* ignore */ }
   return null;
 }
+
+/** Save blocked-out dates to Firestore (config/blockedDates). */
+export async function saveBlockedDates(dates: unknown[]): Promise<void> {
+  try {
+    await setDoc(doc(db(), "config", "blockedDates"), { dates });
+  } catch (e) {
+    console.warn("[firebase] config/blockedDates write failed:", e);
+  }
+}

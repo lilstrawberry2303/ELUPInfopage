@@ -3,6 +3,7 @@ import { collection, query, orderBy, limit, onSnapshot, type Timestamp } from "f
 import { db } from "@/lib/firebase";
 import { BlockChart } from "./BlockChart";
 import { CSScheduler, CWScheduler } from "./CSScheduler";
+import { WorkCalendar } from "./WorkCalendar";
 import { UnitDrawer } from "./UnitDrawer";
 import { PrecinctFilter } from "./PrecinctFilter";
 import { AccountManagement } from "./AccountManagement";
@@ -19,8 +20,7 @@ import { useElup, useActiveBlock } from "@/lib/elup/store";
 import { usePrecincts } from "@/lib/elup/firestore";
 import {
   Activity, Building, CalendarPlus, CheckCircle2, ClipboardList,
-  Plus, PieChart as PieIcon, Zap, Flag, Settings2, Pencil, Trash2,
-} from "lucide-react";
+  Plus, PieChart as PieIcon, Zap, Flag, Settings2, Pencil, Trash2, CalendarDays} from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { toast } from "sonner";
 
@@ -63,6 +63,7 @@ export function ManagerDashboard() {
         <TabsList>
           <TabsTrigger value="appointments">Appointments</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="calendar"><CalendarDays className="mr-1.5 h-3.5 w-3.5" />Work Calendar</TabsTrigger>
           <TabsTrigger value="optout">Opt-Out Records</TabsTrigger>
         </TabsList>
         <TabsContent value="appointments" className="mt-4">
@@ -74,6 +75,10 @@ export function ManagerDashboard() {
         <TabsContent value="accounts" className="mt-4">
           <AccountManagement />
         </TabsContent>
+        <TabsContent value="calendar" className="mt-4">
+          <WorkCalendar />
+        </TabsContent>
+
         <TabsContent value="optout" className="mt-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <OptOutForm
