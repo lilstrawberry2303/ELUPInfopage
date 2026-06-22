@@ -185,12 +185,21 @@ export async function saveSurveyConfig(
   customSurveyFields: unknown[],
   hiddenSurveyGroups: string[],
 ): Promise<void> {
-  const payload = { customSurveyFields, hiddenSurveyGroups };
+  // Firestore rejects undefined values - strip them from each field object
+  const cleanedFields = customSurveyFields.map((f) => {
+    const field = f as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(field)) {
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  });
+  const payload = { customSurveyFields: cleanedFields, hiddenSurveyGroups };
   try { localStorage.setItem(SURVEY_CFG_KEY, JSON.stringify(payload)); } catch { /* ignore */ }
   try {
     await setDoc(doc(db(), "config", "survey"), payload);
   } catch (e) {
-    console.warn("[firebase] config/survey write failed (check Firestore rules) — saved to localStorage only", e);
+    console.warn("[firebase] config/survey write failed:", e);
   }
 }
 

@@ -6,7 +6,7 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, loadSurveyConfig } from "@/lib/firebase";
+import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig } from "@/lib/firebase";
 import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup } from "./types";
 
 // ---- Helpers ----
@@ -178,16 +178,48 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
     let unitsDone = false;
     const tryDone = () => { if (blocksDone && unitsDone) setLoading(false); };
 
-    // Load persisted survey config (custom fields + hidden groups)
-    loadSurveyConfig().then((cfg) => {
-      if (cfg) {
-        localDispatch({
-          type: "SET_SURVEY_CONFIG",
-          customSurveyFields: cfg.customSurveyFields as CustomSurveyField[],
-          hiddenSurveyGroups: cfg.hiddenSurveyGroups as DefaultSurveyGroup[],
-        });
-      }
-    }).catch(() => {});
+    // Real-time listener for survey config (custom fields + hidden groups)
+    const unsubSurveyConfig = onSnapshot(
+      doc(db(), "config", "survey"),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          localDispatch({
+            type: "SET_SURVEY_CONFIG",
+            customSurveyFields: Array.isArray(d.customSurveyFields) ? d.customSurveyFields as CustomSurveyField[] : [],
+            hiddenSurveyGroups: Array.isArray(d.hiddenSurveyGroups) ? d.hiddenSurveyGroups as DefaultSurveyGroup[] : [],
+          });
+        } else {
+          // Doc doesn't exist yet - try localStorage as initial seed
+          try {
+            const raw = localStorage.getItem("elup_survey_config");
+            if (raw) {
+              const d = JSON.parse(raw) as { customSurveyFields: CustomSurveyField[]; hiddenSurveyGroups: DefaultSurveyGroup[] };
+              localDispatch({
+                type: "SET_SURVEY_CONFIG",
+                customSurveyFields: Array.isArray(d.customSurveyFields) ? d.customSurveyFields : [],
+                hiddenSurveyGroups: Array.isArray(d.hiddenSurveyGroups) ? d.hiddenSurveyGroups : [],
+              });
+            }
+          } catch { /* ignore */ }
+        }
+      },
+      (err) => {
+        console.warn("[elup] survey config listener:", err);
+        // Firestore unavailable - fall back to localStorage
+        try {
+          const raw = localStorage.getItem("elup_survey_config");
+          if (raw) {
+            const d = JSON.parse(raw) as { customSurveyFields: CustomSurveyField[]; hiddenSurveyGroups: DefaultSurveyGroup[] };
+            localDispatch({
+              type: "SET_SURVEY_CONFIG",
+              customSurveyFields: Array.isArray(d.customSurveyFields) ? d.customSurveyFields : [],
+              hiddenSurveyGroups: Array.isArray(d.hiddenSurveyGroups) ? d.hiddenSurveyGroups : [],
+            });
+          }
+        } catch { /* ignore */ }
+      },
+    );
 
     const unsubBlocks = onSnapshot(
       collectionGroup(db(), "blocks"),
@@ -249,7 +281,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       (err) => console.error("[elup] users listener:", err),
     );
 
-    return () => { unsubBlocks(); unsubUnits(); unsubUsers(); };
+    return () => { unsubSurveyConfig(); unsubBlocks(); unsubUnits(); unsubUsers(); };
   }, []);
 
   // ---- Utility functions (exposed in context value) ----
