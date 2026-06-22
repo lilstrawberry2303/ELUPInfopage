@@ -596,6 +596,14 @@ function ScheduleDialog({
       toast.error("Unit and date are required");
       return;
     }
+    if (blockedDate) {
+      toast.error(
+        `This date is blocked for ${
+          blockedDate.type === "both" ? "CS & CW" : blockedDate.type
+        }${ blockedDate.reason ? ` — ${blockedDate.reason}` : "" }`,
+      );
+      return;
+    }
     onSave({ blockId, unitKey, date, time, assignee, notes, reminder1, reminder2 });
     setOpen(false);
   };
@@ -612,6 +620,11 @@ function ScheduleDialog({
 
   const sel = parseRange(time);
   const clash = dayBookings.some((s) => rangeOverlaps(parseRange(s.time), sel));
+  const blockedDate = date
+    ? elupState.blockedDates?.find(
+        (b) => b.date === fmtDmy(date) && (b.type === "both" || b.type === mode),
+      )
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -705,7 +718,21 @@ function ScheduleDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Date</Label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className={blockedDate ? "border-destructive ring-1 ring-destructive" : ""}
+                  />
+                  {blockedDate && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                      <span>🚫</span>
+                      <span>
+                        Blocked for {blockedDate.type === "both" ? "CS \u0026 CW" : blockedDate.type}
+                        {blockedDate.reason ? ` — ${blockedDate.reason}` : ""}
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label>Time slot</Label>
@@ -719,18 +746,6 @@ function ScheduleDialog({
                   </Select>
                 </div>
               </div>
-              {date && (() => {
-                const dmy = fmtDmy(date);
-                const bd = elupState.blockedDates?.find(
-                  (b) => b.date === dmy && (b.type === "both" || b.type === mode),
-                );
-                return bd ? (
-                  <div className="rounded-md border border-amber-400 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    🚫 This date is blocked for {bd.type === "both" ? "CS & CW" : bd.type}
-                    {bd.reason ? ` — ${bd.reason}` : ""}
-                  </div>
-                ) : null;
-              })()}
               {clash && (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   ⚠ Another {mode} appointment overlaps with this slot. Check the Day Timetable.
@@ -766,7 +781,7 @@ function ScheduleDialog({
         </Tabs>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className={btn} onClick={submit}>Save</Button>
+          <Button className={btn} onClick={submit} disabled={!!blockedDate}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
