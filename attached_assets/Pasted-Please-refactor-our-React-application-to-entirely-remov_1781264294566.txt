@@ -1,0 +1,28 @@
+Please refactor our React application to entirely remove all local hardcoded mock data arrays, seed functions (such as `makeBlock406A` and `makeBlock408B`), and standard `useReducer` state-management layers from our state context (`store.tsx` or `ElupContext.tsx`). 
+
+We want to migrate the global state engine to hook up directly into a live Firebase Firestore database utilizing real-time `onSnapshot` listeners so changes immediately update our dashboard interfaces across devices.
+
+Please rewrite the state engine to accommodate the following architectural constraints:
+
+1. DATABASE SCHEMA CONTRACT
+- Users Directory: `/users/{username}` (Document ID is the lowercase username string itself). Fields: `username`, `password`, `role`.
+- Recent Activity Feed: `/recentActivity/{activityId}` (Auto-generated UUID). Fields: `type`, `description`, `timestamp`, `operator`, `metadata`.
+- Infrastructure Hierarchy: `/precincts/{precinctId}/blocks/{blockId}/units/{floor_unitNumber}` (Where the unit document ID is strings like "12-101").
+
+2. STRICT DATA SCHEMA MAPPING INSIDE EACH UNIT DOCUMENT
+Ensure that all fields matches our layout requirements when reading or updating a specific unit coordinate leaf document:
+- `unitNo` (string), `floor` (number), `lobby` (string), `exists` (boolean), `csStatus` (string), `cwStatus` (string).
+- `resident`: Object containing `name` and `phone`.
+- `survey`: Nested object containing `surveyDateTime`, `existingLoadAmps` (number), `condition` (string, e.g., 'FAIR'), `gateTypes` (array), `doorFrame` (array), `mainDoor` (array), `electDBBox` (array), `wall` (array), `ceiling` (array), `notes` (string), `residentSignature` (string), and `photos` (string array).
+- `cableWork`: Nested object containing `scheduledDate`, `scheduledTime`, `technician`, `notes`, and `photos` array.
+- `flagForAttention`: A top-level string field containing plaintext audit notes or architectural alerts.
+
+3. REQUIRED STATE MUTATION FUNCTIONS EXPOSED BY THE CONTEXT
+Expose these distinct, straightforward async utility methods within the Context Provider value so our view files can manipulate data cleanly:
+- `updateUnitStatus(precinctId, blockId, unitKey, patch)`: Asynchronously runs `updateDoc` against the targeted unit path layout.
+- `logActivity(type, description, operator, metadata)`: Run an `addDoc` to the `/recentActivity` collection to log events whenever a survey is compiled, an appointment is set, or a cable work phase updates.
+- `onboardUser(account)`: Runs `setDoc` on `/users/{username}` using the trimmed lowercase username handle.
+- `removeUser(username)`: Runs a `deleteDoc` on the target user node.
+
+4. COMPONENT RE-SHAPING
+Ensure that the global variables like `blocks`, `accounts`, `role`, `activeBlockId`, and `chartView` are still exposed with identical property contracts so that dependent interactive chart grids, dropdown menus, and dashboard views continue to compile cleanly without breaking existing front-end layout features.
