@@ -410,54 +410,51 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
           />
         )}
 
-        {customFields.length > 0 && (
-          <div className="space-y-2 rounded-md border border-dashed bg-muted/30 p-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Custom fields</div>
-            {customFields.map((f) => (
-              <div key={f.id}>
-                <Label>{f.label}</Label>
-                {f.type === "checkbox" ? (
-                  <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-                    <Checkbox
-                      checked={!!customValues[f.id]}
-                      onCheckedChange={(v) => setCustomValues({ ...customValues, [f.id]: !!v })}
-                    />
-                    <span>{f.label}</span>
-                  </label>
-                ) : f.type === "checkbox_group" ? (
-                  <div className="mt-1 flex flex-wrap gap-2">
-                    {(f.options ?? []).map((opt) => {
-                      const selected = ((customValues[f.id] as string[]) ?? []).includes(opt);
-                      return (
-                        <label
-                          key={opt}
-                          className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs"
-                        >
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={(v) => {
-                              const cur = (customValues[f.id] as string[]) ?? [];
-                              setCustomValues({
-                                ...customValues,
-                                [f.id]: v ? [...cur, opt] : cur.filter((x) => x !== opt),
-                              });
-                            }}
-                          />
-                          <span>{opt}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <Input
-                    value={(customValues[f.id] as string) ?? ""}
-                    onChange={(e) => setCustomValues({ ...customValues, [f.id]: e.target.value })}
-                  />
-                )}
+        {customFields.map((f) => (
+          <div key={f.id}>
+            <Label>{f.label}</Label>
+            {f.type === "checkbox" ? (
+              <label className="mt-1 flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+                <Checkbox
+                  checked={!!customValues[f.id]}
+                  onCheckedChange={(v) => setCustomValues({ ...customValues, [f.id]: !!v })}
+                />
+                <span>{f.label}</span>
+              </label>
+            ) : f.type === "checkbox_group" ? (
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                {(f.options ?? []).map((opt) => {
+                  const selected = ((customValues[f.id] as string[]) ?? []).includes(opt);
+                  return (
+                    <label
+                      key={opt}
+                      className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs transition ${
+                        selected ? "border-sky-500 bg-sky-50" : "hover:bg-muted"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={(v) => {
+                          const cur = (customValues[f.id] as string[]) ?? [];
+                          setCustomValues({
+                            ...customValues,
+                            [f.id]: v ? [...cur, opt] : cur.filter((x) => x !== opt),
+                          });
+                        }}
+                      />
+                      <span>{opt}</span>
+                    </label>
+                  );
+                })}
               </div>
-            ))}
+            ) : (
+              <Input
+                value={(customValues[f.id] as string) ?? ""}
+                onChange={(e) => setCustomValues({ ...customValues, [f.id]: e.target.value })}
+              />
+            )}
           </div>
-        )}
+        ))}
 
         {!hidden.includes("scheduledCableWork") && (
           <div>
