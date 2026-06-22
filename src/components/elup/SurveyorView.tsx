@@ -736,6 +736,11 @@ function CableWorkScheduleDialog({
 
   const sel = parseRange(t);
   const clash = dayBookings.some((s) => rangeOverlaps(parseRange(s.time), sel));
+  const blockedDate = d
+    ? state.blockedDates?.find(
+        (b) => b.date === fmtDmy(d) && (b.type === "both" || b.type === "CW"),
+      )
+    : undefined;
 
   const summary = date
     ? `${fmtDmy(date)} · ${time}`
@@ -769,7 +774,21 @@ function CableWorkScheduleDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Date</Label>
-                <Input type="date" value={d} onChange={(e) => setD(e.target.value)} />
+                <Input
+                  type="date"
+                  value={d}
+                  onChange={(e) => setD(e.target.value)}
+                  className={blockedDate ? "border-destructive ring-1 ring-destructive" : ""}
+                />
+                {blockedDate && (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                    <span>🚫</span>
+                    <span>
+                      Blocked for {blockedDate.type === "both" ? "CS \u0026 CW" : blockedDate.type}
+                      {blockedDate.reason ? ` — ${blockedDate.reason}` : ""}
+                    </span>
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Time slot</Label>
@@ -810,9 +829,18 @@ function CableWorkScheduleDialog({
           </Button>
           <Button
             className="bg-orange-600 hover:bg-orange-700"
+            disabled={!!blockedDate}
             onClick={() => {
               if (!d) {
                 toast.error("Date is required");
+                return;
+              }
+              if (blockedDate) {
+                toast.error(
+                  `This date is blocked for ${
+                    blockedDate.type === "both" ? "CS & CW" : blockedDate.type
+                  }${blockedDate.reason ? ` — ${blockedDate.reason}` : ""}`,
+                );
                 return;
               }
               onSave(d, t, tech);
