@@ -29,7 +29,7 @@ import { TIME_SLOTS } from "@/lib/elup/slots";
 import { PhotoUploader } from "./PhotoUploader";
 import type {
   UnitData, GateType, DoorFrameCondition, MainDoorType,
-  ElectDBBoxLocation, WallCondition, CeilingCondition,
+  ElectDBBoxLocation, WallCondition, CeilingCondition, CustomSurveyField,
 } from "@/lib/elup/types";
 
 interface Props {
@@ -52,6 +52,7 @@ function dmyToIso(d?: string): string {
 
 export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
   const { state, dispatch } = useElup();
+  const customSurveyFields: CustomSurveyField[] = state.customSurveyFields;
   const block = useActiveBlock();
   const u = unitKey ? block.units[unitKey] : null;
   const isCS = readOnly ? true : state.chartView === "CS";
@@ -242,6 +243,16 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                           {u.survey.electDBBox?.length ? <Row k="DB Box" v={u.survey.electDBBox.join(", ")} /> : null}
                           {u.survey.wall?.length ? <Row k="Wall" v={u.survey.wall.join(", ")} /> : null}
                           {u.survey.ceiling?.length ? <Row k="Ceiling" v={u.survey.ceiling.join(", ")} /> : null}
+                          {u.survey.custom && customSurveyFields.map((f) => {
+                            const val = u.survey!.custom![f.id];
+                            if (val === undefined || val === "" || val === false) return null;
+                            const display = Array.isArray(val)
+                              ? (val as string[]).join(", ")
+                              : val === true
+                              ? "Yes"
+                              : String(val);
+                            return display ? <Row key={f.id} k={f.label} v={display} /> : null;
+                          })}
                           {u.survey.scheduledCableWorkDate && <Row k="CW Scheduled" v={`${u.survey.scheduledCableWorkDate}${u.survey.scheduledCableWorkTime ? ` · ${u.survey.scheduledCableWorkTime}` : ""}`} />}
                           {u.survey.notes && <p className="rounded-md bg-muted/50 p-2 text-xs">{u.survey.notes}</p>}
                           {u.survey.residentSignature && (
