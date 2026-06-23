@@ -249,3 +249,15 @@ export async function uploadDocument(file: File, pathPrefix: string): Promise<st
   await uploadBytes(objectRef, file, { contentType: file.type || "application/octet-stream" });
   return await getDownloadURL(objectRef);
 }
+
+/** Upload company logo to Firebase Storage and return the download URL. */
+export async function uploadLogo(file: File): Promise<string> {
+  const objectRef = ref(storage(), "logos/company-logo");
+  await uploadBytes(objectRef, file, { contentType: file.type });
+  return await getDownloadURL(objectRef);
+}
+
+/** Persist logo URL in Firestore settings/app document (null = cleared). */
+export async function saveLogoUrl(url: string | null): Promise<void> {
+  await setDoc(doc(db(), "settings", "app"), { logoUrl: url ?? null }, { merge: true });
+}

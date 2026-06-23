@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Role } from "./elup/types";
 
@@ -130,6 +130,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(SESSION_KEY);
     }
   }, [state.user]);
+
+  // Sync logo URL from Firestore settings/app
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db(), "settings", "app"),
+      (snap) => {
+        const data = snap.data();
+        const url = (data?.logoUrl as string | null | undefined) ?? null;
+        dispatch({ type: "SET_LOGO", url });
+      },
+      (err) => console.error("[AppContext] settings listener:", err),
+    );
+    return () => unsub();
+  }, []);
 
   // Sync login credentials from Firestore /users collection.
   // Hardcoded defaults remain active until Firestore has at least one valid user doc.

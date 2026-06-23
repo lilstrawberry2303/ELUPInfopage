@@ -511,46 +511,72 @@ function PhotoGallery({
   onUpload?: (next: string[]) => void;
   accent?: "sky" | "orange";
 }) {
+  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+
   if (photos.length === 0 && !showUploader) {
     return <Empty text="No photos uploaded" />;
   }
 
   return (
-    <div className="space-y-2">
-      {photos.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          {photos.map((p, i) => (
-            <div key={p + i} className="group relative aspect-square overflow-hidden rounded-md border bg-muted">
-              <img
-                src={p}
-                alt={`Photo ${i + 1}`}
-                className="h-full w-full cursor-pointer object-cover transition hover:opacity-90"
-                onClick={() => onOpen(photos, i)}
-              />
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(photos.filter((_, idx) => idx !== i))}
-                  className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 opacity-0 transition group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3 text-destructive" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {showUploader && pathPrefix && onUpload && (
-        <PhotoUploader
-          photos={[]}
-          onChange={(newUrls) => onUpload([...photos, ...newUrls])}
-          pathPrefix={pathPrefix}
-          accent={accent}
-          columns={4}
-          uploadOnly
-        />
-      )}
-    </div>
+    <>
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingDelete !== null && onDelete)
+                  onDelete(photos.filter((_, idx) => idx !== pendingDelete));
+                setPendingDelete(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="space-y-2">
+        {photos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((p, i) => (
+              <div key={p + i} className="group relative aspect-square overflow-hidden rounded-md border bg-muted">
+                <img
+                  src={p}
+                  alt={`Photo ${i + 1}`}
+                  className="h-full w-full cursor-pointer object-cover transition hover:opacity-90"
+                  onClick={() => onOpen(photos, i)}
+                />
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(i)}
+                    className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 opacity-0 transition group-hover:opacity-100"
+                  >
+                    <X className="h-3 w-3 text-destructive" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {showUploader && pathPrefix && onUpload && (
+          <PhotoUploader
+            photos={[]}
+            onChange={(newUrls) => onUpload([...photos, ...newUrls])}
+            pathPrefix={pathPrefix}
+            accent={accent}
+            columns={4}
+            uploadOnly
+          />
+        )}
+      </div>
+    </>
   );
 }
 

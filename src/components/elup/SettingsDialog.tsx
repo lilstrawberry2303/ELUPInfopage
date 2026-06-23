@@ -5,15 +5,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Moon, Sun, Upload, X, KeyRound, Check } from "lucide-react";
+import { Settings, Moon, Sun, Upload, X, KeyRound, Check, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
 import { doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, uploadLogo, saveLogoUrl } from "@/lib/firebase";
 
 export function SettingsDialog() {
   const { state, dispatch } = useApp();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Account change state
   const [newUsername, setNewUsername] = useState("");
@@ -21,15 +22,21 @@ export function SettingsDialog() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      dispatch({ type: "SET_LOGO", url: ev.target?.result as string });
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    setLogoUploading(true);
+    try {
+      const url = await uploadLogo(file);
+      await saveLogoUrl(url);
+      dispatch({ type: "SET_LOGO", url });
+      toast.success("Logo uploaded");
+    } catch (err: any) {
+      toast.error("Logo upload failed", { description: String(err?.message ?? err) });
+    } finally {
+      setLogoUploading(false);
+    }
   };
 
   const saveCredentials = async () => {
@@ -133,7 +140,7 @@ export function SettingsDialog() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted/30 overflow-hidden">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-lg border overflow-hidden ${state.settings.logoUrl ? "bg-white" : "bg-muted/30"}`}>
                 {state.settings.logoUrl ? (
                   <img
                     src={state.settings.logoUrl}
@@ -151,15 +158,23 @@ export function SettingsDialog() {
                 className="hidden"
                 onChange={handleLogoUpload}
               />
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-                <Upload className="mr-2 h-3.5 w-3.5" /> Upload Logo
+              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={logoUploading}>
+                {logoUploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}
+                {logoUploading ? "Uploading\u2026" : "Upload Logo"}
               </Button>
               {state.settings.logoUrl && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-destructive hover:text-destructive"
-                  onClick={() => dispatch({ type: "SET_LOGO", url: null })}
+                  onClick={async () => {
+                    try {
+                      await saveLogoUrl(null);
+                      dispatch({ type: "SET_LOGO", url: null });
+                    } catch (err: any) {
+                      toast.error("Failed to remove logo", { description: String(err?.message ?? err) });
+                    }
+                  }}
                 >
                   <X className="mr-1 h-3.5 w-3.5" /> Remove
                 </Button>

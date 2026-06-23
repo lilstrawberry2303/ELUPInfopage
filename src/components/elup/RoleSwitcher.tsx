@@ -26,7 +26,7 @@ export function RoleSwitcher() {
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3 md:px-6">
         {/* Logo + app name */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm overflow-hidden">
+          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm overflow-hidden ${state.settings.logoUrl ? "bg-white border border-border/40" : "bg-primary text-primary-foreground"}`}>
             {state.settings.logoUrl ? (
               <img
                 src={state.settings.logoUrl}
@@ -48,7 +48,7 @@ export function RoleSwitcher() {
         {/* Right side: user info + settings + logout */}
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="hidden text-right sm:block">
-            <div className="text-xs font-medium">{user.org} · {user.displayName}</div>
+            <div className="text-xs font-medium">{user.displayName}</div>
             <div className="text-[11px] text-muted-foreground">{roleLabels[user.role] ?? user.role}</div>
           </div>
           <SettingsDialog />
