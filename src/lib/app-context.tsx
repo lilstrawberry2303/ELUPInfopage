@@ -52,12 +52,7 @@ function readSession(): AppUser | null {
   }
 }
 
-const DEFAULT_CREDENTIALS: Credential[] = [
-  { org: "HS", username: "PM",         password: "12345@", role: "manager",    displayName: "Project Manager" },
-  { org: "HS", username: "surveyor",   password: "12345@", role: "surveyor",   displayName: "Surveyor" },
-  { org: "HS", username: "technician", password: "12345@", role: "technician", displayName: "Technician" },
-  { org: "HS", username: "HDB",        password: "12345@", role: "client",     displayName: "HDB Officer" },
-];
+const DEFAULT_CREDENTIALS: Credential[] = [];
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -146,7 +141,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sync login credentials from Firestore /users collection.
-  // Hardcoded defaults remain active until Firestore has at least one valid user doc.
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db(), "users"),
@@ -166,9 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })
           .filter((c): c is Credential => c !== null);
 
-        if (creds.length > 0) {
-          dispatch({ type: "SET_CREDENTIALS", credentials: creds });
-        }
+        dispatch({ type: "SET_CREDENTIALS", credentials: creds });
       },
       (err) => console.error("[AppContext] users listener:", err),
     );

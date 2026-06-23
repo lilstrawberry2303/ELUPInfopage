@@ -3,11 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Zap, Database } from "lucide-react";
+import { Zap } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
-import { seedDemoData } from "@/lib/elup/seed";
 
 export function LoginPage() {
   const { state, dispatch } = useApp();
@@ -91,76 +89,7 @@ export function LoginPage() {
             </form>
           </CardContent>
         </Card>
-
-        <div className="flex justify-center">
-          <SeedDemoDialog />
-        </div>
       </div>
     </div>
-  );
-}
-
-function SeedDemoDialog() {
-  const [seeding, setSeeding] = useState(false);
-  const [progress, setProgress] = useState<string>("");
-  const [open, setOpen] = useState(false);
-
-  async function handleSeed() {
-    setSeeding(true);
-    setProgress("Starting…");
-    try {
-      await seedDemoData((msg) => setProgress(msg));
-      toast.success("Demo data seeded successfully! You can now sign in with the credentials below.");
-      setOpen(false);
-    } catch (err) {
-      console.error("[Seed]", err);
-      toast.error("Seeding failed — check the console for details.");
-    } finally {
-      setSeeding(false);
-      setProgress("");
-    }
-  }
-
-  return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Database className="h-4 w-4" /> Seed Demo Data
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Seed demo data into Firestore?</AlertDialogTitle>
-          <AlertDialogDescription className="space-y-2">
-            <span className="block">
-              This will write two HDB blocks (406A, 408B) with realistic unit statuses, a set of
-              recent activity events, and the following login credentials into your Firestore
-              database:
-            </span>
-            <span className="block rounded-md border bg-muted/50 px-3 py-2 font-mono text-xs leading-relaxed">
-              pm / 12345@ — Manager<br />
-              surveyor / 12345@ — Surveyor<br />
-              technician / 12345@ — Technician<br />
-              hdb / 12345@ — HDB Officer
-            </span>
-            <span className="block text-sm">
-              Existing documents at the same paths will be overwritten. This is safe to run
-              multiple times.
-            </span>
-            {seeding && progress && (
-              <span className="block rounded-md bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:bg-sky-950 dark:text-sky-300">
-                ⏳ {progress}
-              </span>
-            )}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={seeding}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={(e) => { e.preventDefault(); handleSeed(); }} disabled={seeding}>
-            {seeding ? "Seeding…" : "Seed Demo Data"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   );
 }
