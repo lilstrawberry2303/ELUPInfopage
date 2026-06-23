@@ -120,7 +120,7 @@ export function BlockChart({ onCellClick }: Props) {
   h1{font-size:16px;margin:0 0 2px}
   .meta{color:#64748b;font-size:11px;margin-bottom:12px}
   table{border-collapse:collapse}
-  @media print{body{padding:0}}
+  @media print{body{padding:0}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 </style></head><body>
 <h1>${block.name} — ${view} Chart</h1>
 <div class="meta">${block.precinct} · Generated: ${new Date().toLocaleString()}</div>
@@ -181,6 +181,9 @@ export function BlockChart({ onCellClick }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={printChart} title="Print / Save as PDF">
+            <Printer className="h-4 w-4" />
+          </Button>
           <Tabs value={view} onValueChange={(v) => dispatch({ type: "SET_VIEW", view: v as "CS" | "CW" })}>
             <TabsList>
               <TabsTrigger value="CS" className="data-[state=active]:bg-sky-500 data-[state=active]:text-white">
@@ -191,9 +194,6 @@ export function BlockChart({ onCellClick }: Props) {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button variant="outline" size="sm" onClick={printChart} title="Print / Save as PDF">
-            <Printer className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
