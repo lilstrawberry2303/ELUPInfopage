@@ -19,7 +19,7 @@ import { useElup, useActiveBlock } from "@/lib/elup/store";
 import {
   CalendarDays, Camera, Download, FileSignature, BellRing, CalendarPlus, Trash2,
   Phone, User, Wrench, Zap, ImageOff, Flag, Pencil, ChevronLeft, ChevronRight,
-  X, Upload, CheckCircle2,
+  X, Upload, CheckCircle2, FileText,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -27,6 +27,7 @@ import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { TIME_SLOTS } from "@/lib/elup/slots";
 import { PhotoUploader } from "./PhotoUploader";
+import { DocumentUploader } from "./DocumentUploader";
 import type {
   UnitData, GateType, DoorFrameCondition, MainDoorType,
   ElectDBBoxLocation, WallCondition, CeilingCondition, CustomSurveyField,
@@ -378,6 +379,33 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                     </div>
                   </Section>
                 )}
+
+                {/* Documents */}
+                <Section icon={FileText} title="Documents">
+                  <DocumentUploader
+                    docs={u.documents ?? []}
+                    pathPrefix={`documents/${block.precinct}/${block.id}/${unitKey}`}
+                    onAdd={(doc) => {
+                      dispatch({
+                        type: "UPDATE_UNIT",
+                        blockId: block.id,
+                        unitKey,
+                        patch: { documents: [...(u.documents ?? []), doc] },
+                      });
+                    }}
+                    onRemove={!readOnly ? (idx) => {
+                      const next = [...(u.documents ?? [])];
+                      next.splice(idx, 1);
+                      dispatch({
+                        type: "UPDATE_UNIT",
+                        blockId: block.id,
+                        unitKey,
+                        patch: { documents: next },
+                      });
+                      toast.success("Document removed");
+                    } : undefined}
+                  />
+                </Section>
 
                 <Separator />
 

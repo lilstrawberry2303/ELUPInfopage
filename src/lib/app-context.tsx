@@ -40,6 +40,7 @@ type AppAction =
 const SESSION_KEY = "elup_session";
 
 function readSession(): AppUser | null {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
@@ -90,7 +91,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 }
 
 const initialState: AppState = {
-  user: readSession(),
+  user: null,
   settings: { logoUrl: null, darkMode: false },
   credentials: DEFAULT_CREDENTIALS,
 };
@@ -111,6 +112,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.documentElement.classList.remove("dark");
     }
   }, [state.settings.darkMode]);
+
+  // Restore session from localStorage after client-side hydration (SSR-safe)
+  useEffect(() => {
+    if (!state.user) {
+      const saved = readSession();
+      if (saved) dispatch({ type: 'LOGIN', user: saved });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist / clear session in localStorage whenever the logged-in user changes
   useEffect(() => {

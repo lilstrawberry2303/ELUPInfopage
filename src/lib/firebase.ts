@@ -241,3 +241,11 @@ export async function saveBlockedDates(dates: unknown[]): Promise<void> {
     console.warn("[firebase] config/blockedDates write failed:", e);
   }
 }
+
+/** Upload a document (PDF/DOCX/etc.) to Firebase Storage and return the download URL. */
+export async function uploadDocument(file: File, pathPrefix: string): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const objectRef = ref(storage(), `${pathPrefix}/${Date.now()}-${safeName}`);
+  await uploadBytes(objectRef, file, { contentType: file.type || "application/octet-stream" });
+  return await getDownloadURL(objectRef);
+}

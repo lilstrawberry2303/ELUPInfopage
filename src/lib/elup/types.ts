@@ -37,6 +37,7 @@ export interface UnitData {
   flagged?: boolean;
   flagNote?: string;
   flagForAttention?: string;
+  documents?: { name: string; url: string }[];
   resident?: { name: string; phone: string };
   survey?: {
     surveyDateTime?: string;
