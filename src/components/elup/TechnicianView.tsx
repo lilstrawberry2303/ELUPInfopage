@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Calendar, CalendarClock, CheckCircle2, MapPin, Wrench } from "lucide-react";
+import { Calendar, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, MapPin, Wrench } from "lucide-react";
 import { PhotoUploader } from "./PhotoUploader";
 import { syncUnit, logActivity } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -92,22 +92,31 @@ export function TechnicianView() {
     [allScheduled, today],
   );
 
-  const upcomingAppts = useMemo(() => {
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  const weekRange = useMemo(() => {
     const now = new Date();
     const day = now.getDay() || 7;
     const monday = new Date(now);
     monday.setHours(0, 0, 0, 0);
-    monday.setDate(now.getDate() - (day - 1));
+    monday.setDate(now.getDate() - (day - 1) + weekOffset * 7);
     const sunday = new Date(monday);
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 59, 59, 999);
-    const rest = allScheduled.filter((a) => a.u.cwDate !== today);
-    const week = rest.filter((a) => {
+    return { monday, sunday };
+  }, [weekOffset]);
+
+  const upcomingAppts = useMemo(() => {
+    const { monday, sunday } = weekRange;
+    const items = allScheduled.filter((a) => {
       const t = parseDmy(a.u.cwDate);
       return t >= monday.getTime() && t <= sunday.getTime();
     });
-    return { items: week.length > 0 ? week : rest.slice(0, 10), label: week.length > 0 ? "This week" : "Latest 10" };
-  }, [allScheduled, today]);
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    const label = `${fmt(monday)} – ${fmt(sunday)} ${sunday.getFullYear()}`;
+    return { items, label };
+  }, [allScheduled, weekRange]);
 
   // Emergency conduct CW — cascading selects
   const conductPrecincts = useMemo(
@@ -170,20 +179,42 @@ export function TechnicianView() {
         </CardContent>
       </Card>
 
-      {/* ── Upcoming appointments ────────────────────────── */}
+      {/* ── Weekly CW appointments ───────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Calendar className="h-4 w-4 text-orange-500" />
-            Upcoming CW Appointments
-            <Badge variant="outline" className="text-[10px]">{upcomingAppts.label}</Badge>
+            CW Appointments
+            {weekOffset === 0 && (
+              <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-700">This week</Badge>
+            )}
             <Badge className="ml-auto bg-orange-500 hover:bg-orange-500">{upcomingAppts.items.length}</Badge>
           </CardTitle>
+          {/* Week navigator */}
+          <div className="mt-2 flex items-center justify-between rounded-md border bg-muted/20 px-3 py-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              onClick={() => setWeekOffset((o) => o - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs font-medium text-muted-foreground">{upcomingAppts.label}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              onClick={() => setWeekOffset((o) => o + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {upcomingAppts.items.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-              No upcoming scheduled appointments
+              No CW appointments this week
             </p>
           ) : (
             upcomingAppts.items.map((a) => (
