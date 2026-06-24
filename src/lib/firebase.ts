@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, deleteField,
-  collection, serverTimestamp, getDocs, query, orderBy, writeBatch, type Firestore,
+  collection, serverTimestamp, getDocs, query, orderBy, writeBatch, arrayUnion, type Firestore,
 } from "firebase/firestore";
+import type { UnitActivityEntry } from "@/lib/elup/types";
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -259,4 +260,20 @@ export async function uploadLogo(file: File): Promise<string> {
 /** Persist logo URL in Firestore settings/app document (null = cleared). */
 export async function saveLogoUrl(url: string | null): Promise<void> {
   await setDoc(doc(db(), "settings", "app"), { logoUrl: url ?? null }, { merge: true });
+}
+
+/**
+ * Append a single activity log entry to a unit's activityLog array.
+ * Uses arrayUnion so concurrent writes don't overwrite each other.
+ *
+ * Path: /precincts/{precinctId}/blocks/{blockId}/units/{unitKey}
+ */
+export async function appendUnitActivity(
+  precinctId: string,
+  blockId: string,
+  unitKey: string,
+  entry: UnitActivityEntry,
+): Promise<void> {
+  const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
+  await setDoc(docRef, { activityLog: arrayUnion(entry), updatedAt: serverTimestamp() }, { merge: true });
 }

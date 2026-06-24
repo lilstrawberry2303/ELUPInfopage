@@ -17,6 +17,25 @@ export type ElectDBBoxLocation = "cornice" | "false_ceiling" | "cabinet" | "obst
 export type WallCondition = "uneven" | "plastered" | "rockstone" | "wallpaper";
 export type CeilingCondition = "cornice" | "false_ceiling" | "rockstone" | "wallpaper";
 
+export interface UnitActivityEntry {
+  id: string;
+  type:
+    | "cs_scheduled"
+    | "cs_cancelled"
+    | "cs_completed"
+    | "cw_scheduled"
+    | "cw_cancelled"
+    | "cw_completed"
+    | "opt_out_requested"
+    | "opt_out_approved"
+    | "opt_out_reverted";
+  appointmentDate?: string;
+  appointmentTime?: string;
+  assignee?: string;
+  notes?: string;
+  loggedAt: string;
+}
+
 export interface UnitData {
   unitNo: string;
   floor: number;
@@ -77,6 +96,7 @@ export interface UnitData {
     hdbApprovedAt?: string;
     hdbSignoffUrl?: string;
   };
+  activityLog?: UnitActivityEntry[];
   csDraft?: {
     ownerName?: string;
     ownerPhone?: string;

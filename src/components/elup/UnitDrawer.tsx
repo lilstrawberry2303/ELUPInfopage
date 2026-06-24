@@ -19,7 +19,7 @@ import { useElup, useActiveBlock } from "@/lib/elup/store";
 import {
   CalendarDays, Camera, Download, FileSignature, BellRing, CalendarPlus, Trash2,
   Phone, User, Wrench, Zap, ImageOff, Flag, Pencil, ChevronLeft, ChevronRight,
-  X, Upload, CheckCircle2, FileText,
+  X, Upload, CheckCircle2, FileText, History,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -30,8 +30,33 @@ import { PhotoUploader } from "./PhotoUploader";
 import { DocumentUploader } from "./DocumentUploader";
 import type {
   UnitData, GateType, DoorFrameCondition, MainDoorType,
-  ElectDBBoxLocation, WallCondition, CeilingCondition, CustomSurveyField,
+  ElectDBBoxLocation, WallCondition, CeilingCondition, CustomSurveyField, UnitActivityEntry,
 } from "@/lib/elup/types";
+
+function activityLabel(type: UnitActivityEntry["type"]): string {
+  const map: Record<UnitActivityEntry["type"], string> = {
+    cs_scheduled:      "CS Scheduled",
+    cs_cancelled:      "CS Cancelled",
+    cs_completed:      "CS Completed",
+    cw_scheduled:      "CW Scheduled",
+    cw_cancelled:      "CW Cancelled",
+    cw_completed:      "CW Completed",
+    opt_out_requested: "Opt-Out Requested",
+    opt_out_approved:  "Opt-Out Approved",
+    opt_out_reverted:  "Opt-Out Reverted",
+  };
+  return map[type] ?? type;
+}
+
+function activityStyle(type: UnitActivityEntry["type"]): string {
+  if (type === "cs_scheduled" || type === "cs_completed")
+    return "border-sky-200 bg-sky-50 text-sky-900";
+  if (type === "cw_scheduled" || type === "cw_completed")
+    return "border-orange-200 bg-orange-50 text-orange-900";
+  if (type === "cs_cancelled" || type === "cw_cancelled")
+    return "border-red-200 bg-red-50 text-red-900";
+  return "border-yellow-200 bg-yellow-50 text-yellow-900";
+}
 
 interface Props {
   unitKey: string | null;
@@ -405,6 +430,44 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                     </div>
                   </Section>
                 )}
+
+                {/* History Log */}
+                <Section icon={History} title="History Log">
+                  {(u.activityLog ?? []).length === 0 ? (
+                    <Empty text="No activity recorded yet" />
+                  ) : (
+                    <div className="space-y-2">
+                      {[...(u.activityLog ?? [])]
+                        .sort((a, b) => b.loggedAt.localeCompare(a.loggedAt))
+                        .map((entry) => (
+                          <div
+                            key={entry.id}
+                            className={`rounded-md border px-3 py-2 text-xs ${activityStyle(entry.type)}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold">{activityLabel(entry.type)}</span>
+                              <span className="shrink-0 text-[10px] opacity-70">
+                                {new Date(entry.loggedAt).toLocaleString("en-SG", {
+                                  day: "2-digit", month: "short", year: "numeric",
+                                  hour: "2-digit", minute: "2-digit",
+                                })}
+                              </span>
+                            </div>
+                            {(entry.appointmentDate || entry.assignee) && (
+                              <div className="mt-0.5 opacity-80">
+                                {entry.appointmentDate}
+                                {entry.appointmentTime ? ` · ${entry.appointmentTime}` : ""}
+                                {entry.assignee ? ` · ${entry.assignee}` : ""}
+                              </div>
+                            )}
+                            {entry.notes && (
+                              <div className="mt-0.5 italic opacity-70">{entry.notes}</div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </Section>
 
                 {/* Documents */}
                 <Section icon={FileText} title="Documents">

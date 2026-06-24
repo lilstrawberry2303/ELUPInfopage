@@ -6,8 +6,15 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates } from "@/lib/firebase";
-import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate } from "./types";
+import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity } from "@/lib/firebase";
+import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry } from "./types";
+
+function mkEntry(
+  type: UnitActivityEntry["type"],
+  opts?: { appointmentDate?: string; appointmentTime?: string; assignee?: string; notes?: string },
+): UnitActivityEntry {
+  return { id: crypto.randomUUID(), type, loggedAt: new Date().toISOString(), ...opts };
+}
 
 // ---- Helpers ----
 function slugify(s: string): string {
@@ -399,7 +406,39 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
           case "UPDATE_UNIT": {
             const meta = blockMetasRef.current.get(action.blockId);
             if (!meta) { console.warn("[dispatch] UPDATE_UNIT: unknown blockId", action.blockId); return; }
-            await updateUnitStatus(meta.precinctId, action.blockId, action.unitKey, action.patch as Record<string, unknown>);
+            // Detect completion and cancellation status transitions to log
+            const currentBlock = blocksRef.current.find((b) => b.id === action.blockId);
+            const currentUnit = currentBlock?.units[action.unitKey];
+            const p = action.patch as Record<string, unknown>;
+            await updateUnitStatus(meta.precinctId, action.blockId, action.unitKey, p);
+            if (p.csStatus === "completed" && currentUnit?.csStatus !== "completed") {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_completed", {
+                appointmentDate: currentUnit?.csDate,
+                appointmentTime: currentUnit?.csTime,
+                assignee: currentUnit?.csAssignee,
+              })).catch(() => {});
+            }
+            if (p.cwStatus === "completed" && currentUnit?.cwStatus !== "completed") {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cw_completed", {
+                appointmentDate: currentUnit?.cwDate,
+                appointmentTime: currentUnit?.cwTime,
+                assignee: currentUnit?.cwAssignee,
+              })).catch(() => {});
+            }
+            if (p.csStatus === "pending" && currentUnit?.csStatus === "scheduled" && !p.csDate) {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_cancelled", {
+                appointmentDate: currentUnit?.csDate,
+                appointmentTime: currentUnit?.csTime,
+                assignee: currentUnit?.csAssignee,
+              })).catch(() => {});
+            }
+            if (p.cwStatus === "pending" && currentUnit?.cwStatus === "scheduled" && !p.cwDate) {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cw_cancelled", {
+                appointmentDate: currentUnit?.cwDate,
+                appointmentTime: currentUnit?.cwTime,
+                assignee: currentUnit?.cwAssignee,
+              })).catch(() => {});
+            }
             break;
           }
 
@@ -407,11 +446,34 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             const { appt } = action;
             const meta = blockMetasRef.current.get(appt.blockId);
             if (!meta) return;
+            const prevBlock = blocksRef.current.find((b) => b.id === appt.blockId);
+            const prevUnit = prevBlock?.units[appt.unitKey];
+            // If replacing an existing scheduled appointment, log the old one as cancelled
+            if (appt.type === "CS" && prevUnit?.csDate && prevUnit.csStatus === "scheduled") {
+              appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cs_cancelled", {
+                appointmentDate: prevUnit.csDate,
+                appointmentTime: prevUnit.csTime,
+                assignee: prevUnit.csAssignee,
+                notes: "Replaced by rescheduled appointment",
+              })).catch(() => {});
+            }
+            if (appt.type === "CW" && prevUnit?.cwDate && prevUnit.cwStatus === "scheduled") {
+              appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cw_cancelled", {
+                appointmentDate: prevUnit.cwDate,
+                appointmentTime: prevUnit.cwTime,
+                assignee: prevUnit.cwAssignee,
+                notes: "Replaced by rescheduled appointment",
+              })).catch(() => {});
+            }
             const patch =
               appt.type === "CS"
                 ? { csStatus: "scheduled", csDate: appt.date, csTime: appt.time, csAssignee: appt.assignee }
                 : { cwStatus: "scheduled", cwDate: appt.date, cwTime: appt.time, cwAssignee: appt.assignee };
             await updateUnitStatus(meta.precinctId, appt.blockId, appt.unitKey, patch);
+            appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry(
+              appt.type === "CS" ? "cs_scheduled" : "cw_scheduled",
+              { appointmentDate: appt.date, appointmentTime: appt.time, assignee: appt.assignee },
+            )).catch(() => {});
             await logActivity(
               appt.type === "CS" ? "CS_SCHEDULED" : "CW_SCHEDULED",
               `${appt.type} appointment scheduled for unit ${appt.unitKey}`,
@@ -455,6 +517,9 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               residentSignatureUrl: residentSigUrl,
               approved: false,
             }).catch((e: unknown) => console.warn("[elup] saveOptOutRecord failed", e));
+            appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("opt_out_requested", {
+              notes: action.reason,
+            })).catch(() => {});
             break;
           }
 
@@ -489,6 +554,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               hdbOfficerSignatureUrl: hdbSigUrl,
               hdbApprovedAt: approvedAt,
             }).catch((e: unknown) => console.warn("[elup] saveOptOutRecord (approve) failed", e));
+            appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("opt_out_approved")).catch(() => {});
             break;
           }
 
@@ -500,6 +566,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               cwStatus: "pending",
               optOutRequest: null,
             });
+            appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("opt_out_reverted")).catch(() => {});
             break;
           }
 
