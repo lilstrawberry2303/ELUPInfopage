@@ -6,13 +6,12 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBTwAKpjqzO7LuNvdwqDqoUrw0sv-fkHpA",
-  authDomain: "elup-management-system.firebaseapp.com",
-  projectId: "elup-management-system",
-  storageBucket: "elup-management-system.firebasestorage.app",
-  messagingSenderId: "927153033648",
-  appId: "1:927153033648:web:6716f21ba0fdacd05c8675",
-  measurementId: "G-RW9544V9ZZ",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 let _app: FirebaseApp | null = null;
@@ -102,7 +101,6 @@ export async function logActivity(
     timestamp: serverTimestamp(),
   });
 
-  // Enforce max 100 records — delete oldest beyond the limit
   try {
     const snap = await getDocs(query(collection(db(), "recentActivity"), orderBy("timestamp", "asc")));
     const excess = snap.docs.length - 100;
@@ -168,6 +166,7 @@ export async function saveOptOutRecord(
   const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "optOuts", unitKey);
   await setDoc(docRef, { ...clean(data), updatedAt: serverTimestamp() }, { merge: true });
 }
+
 /** Remove the CS form draft stored for a unit (called after successful submit). */
 export async function clearCsDraft(
   precinctId: string,
@@ -177,6 +176,7 @@ export async function clearCsDraft(
   const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
   await updateDoc(docRef, { csDraft: deleteField(), updatedAt: serverTimestamp() });
 }
+
 /** Persist the CS form customiser state (custom fields + hidden groups) to Firestore. */
 const SURVEY_CFG_KEY = "elup_survey_config";
 
@@ -185,7 +185,6 @@ export async function saveSurveyConfig(
   customSurveyFields: unknown[],
   hiddenSurveyGroups: string[],
 ): Promise<void> {
-  // Firestore rejects undefined values - strip them from each field object
   const cleanedFields = customSurveyFields.map((f) => {
     const field = f as Record<string, unknown>;
     const out: Record<string, unknown> = {};
@@ -208,7 +207,6 @@ export async function loadSurveyConfig(): Promise<{
   customSurveyFields: unknown[];
   hiddenSurveyGroups: string[];
 } | null> {
-  // Try Firestore first
   try {
     const snap = await getDoc(doc(db(), "config", "survey"));
     if (snap.exists()) {
@@ -219,7 +217,6 @@ export async function loadSurveyConfig(): Promise<{
       };
     }
   } catch { /* fall through to localStorage */ }
-  // Fallback: localStorage
   try {
     const raw = localStorage.getItem(SURVEY_CFG_KEY);
     if (raw) {
