@@ -81,7 +81,7 @@ export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
       u.survey.ceiling?.length ? `<tr><td>Ceiling</td><td>${u.survey.ceiling.join(", ")}</td></tr>` : "",
       u.survey.scheduledCableWorkDate ? `<tr><td>CW Scheduled</td><td>${u.survey.scheduledCableWorkDate}${u.survey.scheduledCableWorkTime ? ` · ${u.survey.scheduledCableWorkTime}` : ""}</td></tr>` : "",
       u.survey.notes ? `<tr><td>Notes</td><td>${u.survey.notes}</td></tr>` : "",
-      u.survey.residentSignature ? `<tr><td>Signature</td><td>✓ Resident signed</td></tr>` : "",
+      u.survey.residentSignature ? `<tr><td>Signature</td><td><img src="${u.survey.residentSignature}" style="max-width:220px;height:auto;border:1px solid #ccc;border-radius:4px;background:#fff;" /></td></tr>` : "",
     ].filter(Boolean).join("") : "<tr><td colspan='2'>Survey not completed</td></tr>";
 
     const photoImgs = (u.survey?.photos ?? []).map((p) =>
@@ -785,6 +785,7 @@ function ScheduleQuickDialog({
   unit: UnitData;
   onSave: (patch: Partial<UnitData>) => void;
 }) {
+  const { state: elupState } = useElup();
   const [open, setOpen] = useState(false);
   const existingDate = isCS ? unit.csDate : unit.cwDate;
   const existingTime = isCS ? unit.csTime : unit.cwTime;
@@ -792,6 +793,7 @@ function ScheduleQuickDialog({
   const [date, setDate] = useState(dmyToIso(existingDate));
   const [time, setTime] = useState(existingTime ?? "10:00");
   const [assignee, setAssignee] = useState(existingAssignee ?? "");
+  const roleAccounts = elupState.accounts.filter((a) => a.role === (isCS ? "surveyor" : "technician"));
 
   const submit = () => {
     if (!date) { toast.error("Date required"); return; }
@@ -827,7 +829,16 @@ function ScheduleQuickDialog({
           </div>
           <div>
             <Label>{isCS ? "Surveyor" : "Technician"}</Label>
-            <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Name" />
+            <Select value={assignee} onValueChange={setAssignee}>
+              <SelectTrigger>
+                <SelectValue placeholder={`Select ${isCS ? "surveyor" : "technician"}`} />
+              </SelectTrigger>
+              <SelectContent>
+                {roleAccounts.map((a) => (
+                  <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>

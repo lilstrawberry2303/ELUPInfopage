@@ -218,16 +218,16 @@ export function TechnicianView() {
         />
       )}
 
-      {/* ── Emergency Conduct CW ─────────────────────────── */}
+      {/* ── Conduct CW ─────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Wrench className="h-4 w-4 text-orange-500" /> Conduct CW (Emergency)
+            <Wrench className="h-4 w-4 text-orange-500" /> Conduct CW
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Conduct cable work for any unit with a completed Condition Survey — for emergency or
+            Conduct cable work for any unit with a completed Condition Survey — for
             unscheduled work.
           </p>
           <div>
@@ -282,7 +282,7 @@ export function TechnicianView() {
                   unitKey: conductUnitKey,
                   patch: { cwStatus: "completed", ...patch },
                 });
-                toast.success("Emergency cable work completed");
+                toast.success("Cable work completed");
                 setConductPrecinct("");
                 setConductBlockId("");
                 setConductUnitKey("");
@@ -317,8 +317,8 @@ function WorkLogger({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
           <span>{block.name} #{u.floor}-{u.unitNo}</span>
-          <Badge className={emergency ? "bg-red-500 hover:bg-red-500" : "bg-orange-500 hover:bg-orange-500"}>
-            {emergency ? "Emergency CW" : "Logging"}
+          <Badge className={emergency ? "bg-amber-500 hover:bg-amber-500" : "bg-orange-500 hover:bg-orange-500"}>
+            {emergency ? "Unscheduled CW" : "Logging"}
           </Badge>
         </CardTitle>
       </CardHeader>
