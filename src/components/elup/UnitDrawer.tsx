@@ -174,8 +174,34 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                       <FileSignature className="h-4 w-4" />
                       OPT OUT — {u.optOutRequest.requestedDate}
                       {u.optOutRequest.approved
-                        ? <Badge className="ml-auto bg-emerald-600">Approved</Badge>
-                        : <Badge variant="outline" className="ml-auto">Pending</Badge>}
+                        ? <Badge className="ml-1 bg-emerald-600">Approved</Badge>
+                        : <Badge variant="outline" className="ml-1">Pending</Badge>}
+                      {isManager && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="ml-auto h-6 px-2 text-xs border-yellow-500 text-yellow-800 hover:bg-yellow-100">
+                              Revert
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Revert opt-out?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will remove the opt-out record and reset the unit's CS and CW status back to <strong>Pending</strong>. This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => dispatch({ type: "REVERT_OPT_OUT", blockId: block.id, unitKey })}
+                              >
+                                Yes, revert
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                     <p className="mt-1 text-xs">{u.optOutRequest.reason}</p>
                   </div>

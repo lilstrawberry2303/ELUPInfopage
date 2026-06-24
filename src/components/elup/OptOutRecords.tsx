@@ -2,12 +2,19 @@ import { useMemo, useState } from "react";
 import { useElup } from "@/lib/elup/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Clock, FileText, X } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { CheckCircle2, Clock, FileText, RotateCcw, X } from "lucide-react";
 
 export function OptOutRecords() {
-  const { state } = useElup();
+  const { state, dispatch } = useElup();
+  const isManager = state.role === "manager";
   const [selPrecinct, setSelPrecinct] = useState("");
   const [selBlockId, setSelBlockId] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -146,7 +153,7 @@ export function OptOutRecords() {
                   <p className="text-sm">{req.reason}</p>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {req.signature && (
                     <button
                       className="flex items-center gap-1 text-xs text-sky-700 hover:underline"
@@ -167,6 +174,32 @@ export function OptOutRecords() {
                         </span>
                       )}
                     </button>
+                  )}
+                  {isManager && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="ml-auto h-7 gap-1 text-xs">
+                          <RotateCcw className="h-3 w-3" /> Revert to Normal
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Revert opt-out?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove the opt-out record for unit <strong>#{u.floor}-{u.unitNo}</strong> and reset its CS and CW status back to <strong>Pending</strong>. This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => dispatch({ type: "REVERT_OPT_OUT", blockId: selectedBlock!.id, unitKey: key })}
+                          >
+                            Yes, revert
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </div>
               </div>

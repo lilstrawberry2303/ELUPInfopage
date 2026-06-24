@@ -63,6 +63,7 @@ type Action =
   | { type: "ADD_APPOINTMENT"; appt: Appointment }
   | { type: "REQUEST_OPT_OUT"; blockId: string; unitKey: string; reason: string; signature: string }
   | { type: "APPROVE_OPT_OUT"; blockId: string; unitKey: string; signature: string }
+  | { type: "REVERT_OPT_OUT"; blockId: string; unitKey: string }
   | { type: "ADD_BLOCK"; block: Omit<Block, "precinctId"> }
   | { type: "ADD_ACCOUNT"; account: Account }
   | { type: "UPDATE_ACCOUNT"; id: string; patch: Partial<Account> }
@@ -488,6 +489,17 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               hdbOfficerSignatureUrl: hdbSigUrl,
               hdbApprovedAt: approvedAt,
             }).catch((e: unknown) => console.warn("[elup] saveOptOutRecord (approve) failed", e));
+            break;
+          }
+
+          case "REVERT_OPT_OUT": {
+            const meta = blockMetasRef.current.get(action.blockId);
+            if (!meta) return;
+            await updateUnitStatus(meta.precinctId, action.blockId, action.unitKey, {
+              csStatus: "pending",
+              cwStatus: "pending",
+              optOutRequest: null,
+            });
             break;
           }
 
