@@ -131,56 +131,58 @@ export function SettingsDialog() {
         </DialogHeader>
 
         <div className="space-y-6 py-2">
-          {/* Company Logo */}
-          <div className="space-y-3">
-            <div>
-              <Label className="text-sm font-semibold">Company Logo</Label>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Upload your company logo to replace the default icon in the navigation bar.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-lg border overflow-hidden ${state.settings.logoUrl ? "bg-white" : "bg-muted/30"}`}>
-                {state.settings.logoUrl ? (
-                  <img
-                    src={state.settings.logoUrl}
-                    alt="Company logo"
-                    className="h-full w-full object-contain p-1"
-                  />
-                ) : (
-                  <span className="text-[10px] text-muted-foreground">None</span>
+          {/* Company Logo — manager only */}
+          {state.user?.role === "manager" && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-sm font-semibold">Company Logo</Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Upload your company logo to replace the default icon in the navigation bar.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-lg border overflow-hidden ${state.settings.logoUrl ? "bg-white" : "bg-muted/30"}`}>
+                  {state.settings.logoUrl ? (
+                    <img
+                      src={state.settings.logoUrl}
+                      alt="Company logo"
+                      className="h-full w-full object-contain p-1"
+                    />
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">None</span>
+                  )}
+                </div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/gif,image/webp"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+                <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={logoUploading}>
+                  {logoUploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}
+                  {logoUploading ? "Uploading\u2026" : "Upload Logo"}
+                </Button>
+                {state.settings.logoUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={async () => {
+                      try {
+                        await saveLogoUrl(null);
+                        dispatch({ type: "SET_LOGO", url: null });
+                      } catch (err: any) {
+                        toast.error("Failed to remove logo", { description: String(err?.message ?? err) });
+                      }
+                    }}
+                  >
+                    <X className="mr-1 h-3.5 w-3.5" /> Remove
+                  </Button>
                 )}
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/png,image/jpeg,image/svg+xml,image/gif,image/webp"
-                className="hidden"
-                onChange={handleLogoUpload}
-              />
-              <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={logoUploading}>
-                {logoUploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}
-                {logoUploading ? "Uploading\u2026" : "Upload Logo"}
-              </Button>
-              {state.settings.logoUrl && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={async () => {
-                    try {
-                      await saveLogoUrl(null);
-                      dispatch({ type: "SET_LOGO", url: null });
-                    } catch (err: any) {
-                      toast.error("Failed to remove logo", { description: String(err?.message ?? err) });
-                    }
-                  }}
-                >
-                  <X className="mr-1 h-3.5 w-3.5" /> Remove
-                </Button>
-              )}
             </div>
-          </div>
+          )}
 
           {/* Night Mode */}
           <div className="flex items-center justify-between rounded-lg border p-4">
