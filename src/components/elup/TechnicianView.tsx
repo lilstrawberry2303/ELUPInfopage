@@ -154,9 +154,9 @@ export function TechnicianView() {
 
       {/* ── Today's appointments ─────────────────────────── */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <CalendarClock className="h-4 w-4 text-orange-500" />
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <CalendarClock className="h-3.5 w-3.5 text-orange-500" />
             My CW Appointments Today
             <Badge variant="outline" className="ml-auto border-orange-400 bg-white text-orange-700 text-xs">
               {today}
@@ -183,9 +183,9 @@ export function TechnicianView() {
 
       {/* ── Weekly CW appointments ───────────────────────── */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Calendar className="h-4 w-4 text-orange-500" />
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Calendar className="h-3.5 w-3.5 text-orange-500" />
             CW Appointments
             {weekOffset === 0 && (
               <Badge variant="outline" className="text-[10px] border-orange-300 text-orange-700">This week</Badge>
@@ -259,10 +259,6 @@ export function TechnicianView() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Conduct cable work for any unit with a completed Condition Survey — for
-            unscheduled work.
-          </p>
           <div>
             <Label>Precinct</Label>
             <Select
