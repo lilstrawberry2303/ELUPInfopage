@@ -28,7 +28,8 @@ export interface UnitActivityEntry {
     | "cw_completed"
     | "opt_out_requested"
     | "opt_out_approved"
-    | "opt_out_reverted";
+    | "opt_out_reverted"
+    | "cs_reminder_sent";
   appointmentDate?: string;
   appointmentTime?: string;
   assignee?: string;
@@ -48,6 +49,7 @@ export interface UnitData {
   csNotes?: string;
   csReminder1?: string;
   csReminder2?: string;
+  csReminders?: string[];
   cwStatus: "pending" | "scheduled" | "in_progress" | "completed" | "opt_out";
   cwDate?: string;
   cwTime?: string;

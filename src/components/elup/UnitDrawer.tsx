@@ -44,6 +44,7 @@ function activityLabel(type: UnitActivityEntry["type"]): string {
     opt_out_requested: "Opt-Out Requested",
     opt_out_approved:  "Opt-Out Approved",
     opt_out_reverted:  "Opt-Out Reverted",
+    cs_reminder_sent:  "CS Reminder Sent",
   };
   return map[type] ?? type;
 }
@@ -55,6 +56,8 @@ function activityStyle(type: UnitActivityEntry["type"]): string {
     return "border-orange-200 bg-orange-50 text-orange-900";
   if (type === "cs_cancelled" || type === "cw_cancelled")
     return "border-red-200 bg-red-50 text-red-900";
+  if (type === "cs_reminder_sent")
+    return "border-amber-200 bg-amber-50 text-amber-900";
   return "border-yellow-200 bg-yellow-50 text-yellow-900";
 }
 
@@ -74,6 +77,88 @@ function dmyToIso(d?: string): string {
   if (!d) return "";
   const [dd, mm, yy] = d.split(/[/.]/);
   return `20${yy}-${mm}-${dd}`;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+}
+
+function CsReminderSection({
+  u, blockId, unitKey, readOnly,
+}: { u: import("@/lib/elup/types").UnitData; blockId: string; unitKey: string; readOnly: boolean }) {
+  const { dispatch } = useElup();
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState("");
+
+  const allReminders: string[] = [
+    ...(u.csReminder1 ? [u.csReminder1] : []),
+    ...(u.csReminder2 ? [u.csReminder2] : []),
+    ...(u.csReminders ?? []),
+  ];
+  const nextNum = allReminders.length + 1;
+
+  return (
+    <>
+      {allReminders.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No reminders sent yet.</p>
+      ) : (
+        <div className="space-y-1 mb-2">
+          {allReminders.map((d, i) => (
+            <div key={i} className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+              <BellRing className="h-3 w-3 shrink-0" />
+              <span className="font-medium">{ordinal(i + 1)} Reminder</span>
+              <span className="ml-auto">{d}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!readOnly && (
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs">
+              <BellRing className="h-3 w-3" />
+              Send CS Reminder
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Send CS Reminder</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-1">
+              <p className="text-sm text-muted-foreground">
+                This will log the <span className="font-semibold text-foreground">{ordinal(nextNum)} reminder</span> for this unit in the History Log.
+              </p>
+              <div>
+                <Label>Reminder Date</Label>
+                <Input
+                  type="date"
+                  className="mt-1"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setOpen(false); setDate(""); }}>Cancel</Button>
+              <Button
+                disabled={!date}
+                onClick={() => {
+                  dispatch({ type: "SEND_CS_REMINDER", blockId, unitKey, date: fmtDmy(date), notes: `${ordinal(nextNum)} reminder` });
+                  toast.success(`${ordinal(nextNum)} CS reminder logged`);
+                  setDate("");
+                  setOpen(false);
+                }}
+              >
+                Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
 }
 
 export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
@@ -247,22 +332,9 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                       ) : <Empty text="Not scheduled" />}
                     </Section>
 
-                    {!u.csDate && !readOnly && (
-                      <Section icon={BellRing} title="CS Reminders">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-[11px]">1st reminder</Label>
-                            <Input type="date" value={dmyToIso(u.csReminder1)} className="h-8 text-xs"
-                              onChange={(e) => dispatch({ type: "UPDATE_UNIT", blockId: block.id, unitKey, patch: { csReminder1: e.target.value ? fmtDmy(e.target.value) : undefined } })} />
-                          </div>
-                          <div>
-                            <Label className="text-[11px]">2nd reminder</Label>
-                            <Input type="date" value={dmyToIso(u.csReminder2)} className="h-8 text-xs"
-                              onChange={(e) => dispatch({ type: "UPDATE_UNIT", blockId: block.id, unitKey, patch: { csReminder2: e.target.value ? fmtDmy(e.target.value) : undefined } })} />
-                          </div>
-                        </div>
-                      </Section>
-                    )}
+                    <Section icon={BellRing} title="CS Reminders">
+                      <CsReminderSection u={u} blockId={block.id} unitKey={unitKey} readOnly={readOnly} />
+                    </Section>
 
                     {/* Survey Findings */}
                     <Section icon={Zap} title="Survey Findings">

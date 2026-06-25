@@ -259,19 +259,14 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                 label: `${blockName} · #${u.floor}-${u.unitNo}`,
                 unitLabel: `#${u.floor}-${u.unitNo} · Lby ${u.lobby}`,
               }))}
-              onSave={({ blockId, unitKey, date, time, assignee, notes, reminder1, reminder2 }) => {
+              onSave={({ blockId, unitKey, date, time, assignee, notes }) => {
                 const dateStr = fmtDmy(date);
                 dispatch({
                   type: "UPDATE_UNIT",
                   blockId,
                   unitKey,
                   patch: isCS
-                    ? {
-                        csStatus: "scheduled", csDate: dateStr, csTime: time,
-                        csAssignee: assignee, csNotes: notes,
-                        csReminder1: reminder1 ? fmtDmy(reminder1) : undefined,
-                        csReminder2: reminder2 ? fmtDmy(reminder2) : undefined,
-                      }
+                    ? { csStatus: "scheduled", csDate: dateStr, csTime: time, csAssignee: assignee, csNotes: notes }
                     : { cwStatus: "scheduled", cwDate: dateStr, cwTime: time, cwAssignee: assignee, cwNotes: notes },
                 });
                 dispatch({
@@ -409,10 +404,14 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                       Unassigned
                     </Badge>
                   )}
-                  {isCS && (unit.csReminder1 || unit.csReminder2) && (
+                  {isCS && ((unit.csReminders?.length ?? 0) > 0 || unit.csReminder1 || unit.csReminder2) && (
                     <span className="ml-1 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">
                       <BellRing className="h-2.5 w-2.5" />
-                      {unit.csReminder1 ?? "—"}{unit.csReminder2 ? ` / ${unit.csReminder2}` : ""}
+                      {[
+                        ...(unit.csReminder1 ? [unit.csReminder1] : []),
+                        ...(unit.csReminder2 ? [unit.csReminder2] : []),
+                        ...(unit.csReminders ?? []),
+                      ].join(" / ")}
                     </span>
                   )}
                 </div>
@@ -443,22 +442,16 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                       time: getTime(unit) ?? "09:00-10:00",
                       assignee: getAssignee(unit) ?? "",
                       notes: getNotes(unit) ?? "",
-                      reminder1: isCS ? dmyToIso(unit.csReminder1) : "",
-                      reminder2: isCS ? dmyToIso(unit.csReminder2) : "",
                     }}
                     unitOptions={[{ k: unitKey, blockId, label: `${blockName} · #${unit.floor}-${unit.unitNo}` }]}
                     lockUnit
-                    onSave={({ date, time, assignee, notes, reminder1, reminder2 }) => {
+                    onSave={({ date, time, assignee, notes }) => {
                       dispatch({
                         type: "UPDATE_UNIT",
                         blockId,
                         unitKey,
                         patch: isCS
-                          ? {
-                              csDate: fmtDmy(date), csTime: time, csAssignee: assignee, csNotes: notes,
-                              csReminder1: reminder1 ? fmtDmy(reminder1) : undefined,
-                              csReminder2: reminder2 ? fmtDmy(reminder2) : undefined,
-                            }
+                          ? { csDate: fmtDmy(date), csTime: time, csAssignee: assignee, csNotes: notes }
                           : { cwDate: fmtDmy(date), cwTime: time, cwAssignee: assignee, cwNotes: notes },
                       });
                       toast.success("Appointment updated");
@@ -522,8 +515,6 @@ interface SaveData {
   time: string;
   assignee: string;
   notes: string;
-  reminder1?: string;
-  reminder2?: string;
 }
 
 interface BookedSlot {
@@ -558,8 +549,6 @@ function ScheduleDialog({
   const [time, setTime] = useState(initial?.time ?? "09:00-10:00");
   const [assignee, setAssignee] = useState(initial?.assignee ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [reminder1, setReminder1] = useState(initial?.reminder1 ?? "");
-  const [reminder2, setReminder2] = useState(initial?.reminder2 ?? "");
   const [selPrecinct, setSelPrecinct] = useState(() =>
     unitOptions.find((u) => u.blockId === (initial?.blockId ?? ""))?.precinct ?? ""
   );
@@ -604,7 +593,7 @@ function ScheduleDialog({
       );
       return;
     }
-    onSave({ blockId, unitKey, date, time, assignee, notes, reminder1, reminder2 });
+    onSave({ blockId, unitKey, date, time, assignee, notes });
     setOpen(false);
   };
 

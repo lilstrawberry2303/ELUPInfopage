@@ -6,14 +6,19 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity } from "@/lib/firebase";
+import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder } from "@/lib/firebase";
 import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry } from "./types";
 
 function mkEntry(
   type: UnitActivityEntry["type"],
   opts?: { appointmentDate?: string; appointmentTime?: string; assignee?: string; notes?: string },
 ): UnitActivityEntry {
-  return { id: crypto.randomUUID(), type, loggedAt: new Date().toISOString(), ...opts };
+  const entry: UnitActivityEntry = { id: crypto.randomUUID(), type, loggedAt: new Date().toISOString() };
+  if (opts?.appointmentDate) entry.appointmentDate = opts.appointmentDate;
+  if (opts?.appointmentTime) entry.appointmentTime = opts.appointmentTime;
+  if (opts?.assignee) entry.assignee = opts.assignee;
+  if (opts?.notes) entry.notes = opts.notes;
+  return entry;
 }
 
 // ---- Helpers ----
@@ -82,7 +87,8 @@ type Action =
   | { type: "DELETE_SURVEY_FIELD"; id: string }
   | { type: "TOGGLE_SURVEY_GROUP"; group: DefaultSurveyGroup }
   | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
-  | { type: "REMOVE_BLOCKED_DATE"; id: string };
+  | { type: "REMOVE_BLOCKED_DATE"; id: string }
+  | { type: "SEND_CS_REMINDER"; blockId: string; unitKey: string; date: string; notes?: string };
 
 // ---- Local-only UI state (never touches Firestore) ----
 interface LocalState {
@@ -567,6 +573,23 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
               optOutRequest: null,
             });
             appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("opt_out_reverted")).catch(() => {});
+            break;
+          }
+
+          case "SEND_CS_REMINDER": {
+            const meta = blockMetasRef.current.get(action.blockId);
+            if (!meta) return;
+            const reminderBlock = blocksRef.current.find((b) => b.id === action.blockId);
+            const reminderUnit = reminderBlock?.units[action.unitKey];
+            const remCount = (reminderUnit?.csReminders?.length ?? 0) + 1;
+            await appendCsReminder(meta.precinctId, action.blockId, action.unitKey, action.date);
+            appendUnitActivity(
+              meta.precinctId, action.blockId, action.unitKey,
+              mkEntry("cs_reminder_sent", {
+                appointmentDate: action.date,
+                notes: action.notes ?? `Reminder #${remCount}`,
+              }),
+            ).catch((e: unknown) => console.warn("[elup] cs_reminder_sent log failed:", e));
             break;
           }
 

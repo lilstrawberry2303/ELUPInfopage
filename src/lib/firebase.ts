@@ -265,6 +265,7 @@ export async function saveLogoUrl(url: string | null): Promise<void> {
 /**
  * Append a single activity log entry to a unit's activityLog array.
  * Uses arrayUnion so concurrent writes don't overwrite each other.
+ * Strips undefined values — Firestore rejects them and they cause silent failures.
  *
  * Path: /precincts/{precinctId}/blocks/{blockId}/units/{unitKey}
  */
@@ -275,5 +276,22 @@ export async function appendUnitActivity(
   entry: UnitActivityEntry,
 ): Promise<void> {
   const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
-  await setDoc(docRef, { activityLog: arrayUnion(entry), updatedAt: serverTimestamp() }, { merge: true });
+  const cleanEntry = clean(entry as unknown as Record<string, unknown>);
+  await setDoc(docRef, { activityLog: arrayUnion(cleanEntry), updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Append a CS reminder date string to a unit's csReminders array.
+ * Uses arrayUnion so concurrent writes don't overwrite each other.
+ *
+ * Path: /precincts/{precinctId}/blocks/{blockId}/units/{unitKey}
+ */
+export async function appendCsReminder(
+  precinctId: string,
+  blockId: string,
+  unitKey: string,
+  date: string,
+): Promise<void> {
+  const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
+  await setDoc(docRef, { csReminders: arrayUnion(date), updatedAt: serverTimestamp() }, { merge: true });
 }
