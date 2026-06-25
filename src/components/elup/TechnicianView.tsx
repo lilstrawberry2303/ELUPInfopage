@@ -44,18 +44,20 @@ function ApptRow({
   return (
     <button
       onClick={onClick}
-      className={`mt-1.5 flex w-full items-center gap-2 rounded-md border bg-white px-2.5 py-2 text-sm text-left transition ${
+      className={`mt-1.5 w-full rounded-md border bg-white px-3 py-2.5 text-sm text-left transition ${
         active ? "border-orange-500 ring-1 ring-orange-200" : "hover:bg-muted"
       }`}
     >
-      <div className="flex w-14 flex-col">
-        <span className="text-sm font-bold text-orange-700">{u.cwTime ?? "—"}</span>
-        <span className="text-xs text-muted-foreground">{u.cwDate}</span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-bold leading-snug">{blockName} #{u.floor}-{u.unitNo}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">{precinct} · Lobby {u.lobby}</div>
+        </div>
+        <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-xs font-semibold text-orange-700">
+          {u.cwTime ?? "—"}
+        </span>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-base font-bold">{blockName} #{u.floor}-{u.unitNo}</div>
-        <div className="text-xs text-muted-foreground">{precinct} · Lobby {u.lobby}</div>
-      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{u.cwDate}</div>
     </button>
   );
 }
