@@ -1,1 +1,0 @@
-- [Firestore undefined values bug](firestore-undefined-bug.md) — arrayUnion silently fails when entry object contains undefined fields; always strip before writing.
