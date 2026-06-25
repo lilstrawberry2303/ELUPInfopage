@@ -418,6 +418,20 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             const currentUnit = currentBlock?.units[action.unitKey];
             const p = action.patch as Record<string, unknown>;
             await updateUnitStatus(meta.precinctId, action.blockId, action.unitKey, p);
+            if (p.csStatus === "scheduled" && currentUnit?.csStatus !== "scheduled") {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_scheduled", {
+                appointmentDate: p.csDate as string,
+                appointmentTime: p.csTime as string,
+                assignee: p.csAssignee as string,
+              })).catch(() => {});
+            }
+            if (p.cwStatus === "scheduled" && currentUnit?.cwStatus !== "scheduled") {
+              appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cw_scheduled", {
+                appointmentDate: p.cwDate as string,
+                appointmentTime: p.cwTime as string,
+                assignee: p.cwAssignee as string,
+              })).catch(() => {});
+            }
             if (p.csStatus === "completed" && currentUnit?.csStatus !== "completed") {
               appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_completed", {
                 appointmentDate: currentUnit?.csDate,
@@ -477,10 +491,6 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
                 ? { csStatus: "scheduled", csDate: appt.date, csTime: appt.time, csAssignee: appt.assignee }
                 : { cwStatus: "scheduled", cwDate: appt.date, cwTime: appt.time, cwAssignee: appt.assignee };
             await updateUnitStatus(meta.precinctId, appt.blockId, appt.unitKey, patch);
-            appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry(
-              appt.type === "CS" ? "cs_scheduled" : "cw_scheduled",
-              { appointmentDate: appt.date, appointmentTime: appt.time, assignee: appt.assignee },
-            )).catch(() => {});
             await logActivity(
               appt.type === "CS" ? "CS_SCHEDULED" : "CW_SCHEDULED",
               `${appt.type} appointment scheduled for unit ${appt.unitKey}`,
