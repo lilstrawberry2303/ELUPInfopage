@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { useElup } from "@/lib/elup/store";
 import { useApp } from "@/lib/app-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,6 +143,14 @@ export function TechnicianView() {
   const isActive = (blockId: string, unitKey: string) =>
     active?.blockId === blockId && active?.unitKey === unitKey;
 
+  const loggerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (active) {
+      setTimeout(() => loggerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
+  }, [active?.blockId, active?.unitKey]);
+
   return (
     <div className="mx-auto max-w-2xl space-y-4 px-4 py-5">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -180,6 +188,28 @@ export function TechnicianView() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── Work logger (moved inline after today's appointments) */}
+      {active && (
+        <div ref={loggerRef}>
+          <WorkLogger
+            key={`${active.blockId}::${active.unitKey}`}
+            blockId={active.blockId}
+            unitKey={active.unitKey}
+            techName={techName}
+            onComplete={(patch) => {
+              dispatch({
+                type: "UPDATE_UNIT",
+                blockId: active.blockId,
+                unitKey: active.unitKey,
+                patch: { cwStatus: "completed", ...patch },
+              });
+              toast.success("Cable work logged and marked complete");
+              setActive(null);
+            }}
+          />
+        </div>
+      )}
 
       {/* ── Weekly CW appointments ───────────────────────── */}
       <Card>
@@ -231,25 +261,6 @@ export function TechnicianView() {
         </CardContent>
       </Card>
 
-      {/* ── Work logger (for scheduled appointments) ─────── */}
-      {active && (
-        <WorkLogger
-          key={`${active.blockId}::${active.unitKey}`}
-          blockId={active.blockId}
-          unitKey={active.unitKey}
-          techName={techName}
-          onComplete={(patch) => {
-            dispatch({
-              type: "UPDATE_UNIT",
-              blockId: active.blockId,
-              unitKey: active.unitKey,
-              patch: { cwStatus: "completed", ...patch },
-            });
-            toast.success("Cable work logged and marked complete");
-            setActive(null);
-          }}
-        />
-      )}
 
       {/* ── Conduct CW ─────────────────────────── */}
       <Card>
