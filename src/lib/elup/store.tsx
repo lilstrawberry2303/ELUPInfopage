@@ -425,12 +425,36 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
                 assignee: p.csAssignee as string,
               })).catch(() => {});
             }
+            if (p.csStatus === "scheduled" && currentUnit?.csStatus === "scheduled") {
+              const dateChanged = p.csDate && p.csDate !== currentUnit.csDate;
+              const timeChanged = p.csTime !== undefined && p.csTime !== currentUnit.csTime;
+              if (dateChanged || timeChanged) {
+                appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_scheduled", {
+                  appointmentDate: p.csDate as string,
+                  appointmentTime: p.csTime as string,
+                  assignee: (p.csAssignee as string) || currentUnit.csAssignee,
+                  notes: `Rescheduled from ${currentUnit.csDate ?? ""}${currentUnit.csTime ? " " + currentUnit.csTime : ""}`.trim(),
+                })).catch(() => {});
+              }
+            }
             if (p.cwStatus === "scheduled" && currentUnit?.cwStatus !== "scheduled") {
               appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cw_scheduled", {
                 appointmentDate: p.cwDate as string,
                 appointmentTime: p.cwTime as string,
                 assignee: p.cwAssignee as string,
               })).catch(() => {});
+            }
+            if (p.cwStatus === "scheduled" && currentUnit?.cwStatus === "scheduled") {
+              const dateChanged = p.cwDate && p.cwDate !== currentUnit.cwDate;
+              const timeChanged = p.cwTime !== undefined && p.cwTime !== currentUnit.cwTime;
+              if (dateChanged || timeChanged) {
+                appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cw_scheduled", {
+                  appointmentDate: p.cwDate as string,
+                  appointmentTime: p.cwTime as string,
+                  assignee: (p.cwAssignee as string) || currentUnit.cwAssignee,
+                  notes: `Rescheduled from ${currentUnit.cwDate ?? ""}${currentUnit.cwTime ? " " + currentUnit.cwTime : ""}`.trim(),
+                })).catch(() => {});
+              }
             }
             if (p.csStatus === "completed" && currentUnit?.csStatus !== "completed") {
               appendUnitActivity(meta.precinctId, action.blockId, action.unitKey, mkEntry("cs_completed", {
@@ -471,20 +495,40 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             const prevUnit = prevBlock?.units[appt.unitKey];
             // If replacing an existing scheduled appointment, log the old one as cancelled
             if (appt.type === "CS" && prevUnit?.csDate && prevUnit.csStatus === "scheduled") {
-              appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cs_cancelled", {
-                appointmentDate: prevUnit.csDate,
-                appointmentTime: prevUnit.csTime,
-                assignee: prevUnit.csAssignee,
-                notes: "Replaced by rescheduled appointment",
-              })).catch(() => {});
+              const dateChanged = appt.date !== prevUnit.csDate;
+              const timeChanged = appt.time !== prevUnit.csTime;
+              if (dateChanged || timeChanged) {
+                appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cs_cancelled", {
+                  appointmentDate: prevUnit.csDate,
+                  appointmentTime: prevUnit.csTime,
+                  assignee: prevUnit.csAssignee,
+                  notes: "Replaced by rescheduled appointment",
+                })).catch(() => {});
+                appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cs_scheduled", {
+                  appointmentDate: appt.date,
+                  appointmentTime: appt.time,
+                  assignee: appt.assignee,
+                  notes: `Rescheduled from ${prevUnit.csDate ?? ""}${prevUnit.csTime ? " " + prevUnit.csTime : ""}`.trim(),
+                })).catch(() => {});
+              }
             }
             if (appt.type === "CW" && prevUnit?.cwDate && prevUnit.cwStatus === "scheduled") {
-              appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cw_cancelled", {
-                appointmentDate: prevUnit.cwDate,
-                appointmentTime: prevUnit.cwTime,
-                assignee: prevUnit.cwAssignee,
-                notes: "Replaced by rescheduled appointment",
-              })).catch(() => {});
+              const dateChanged = appt.date !== prevUnit.cwDate;
+              const timeChanged = appt.time !== prevUnit.cwTime;
+              if (dateChanged || timeChanged) {
+                appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cw_cancelled", {
+                  appointmentDate: prevUnit.cwDate,
+                  appointmentTime: prevUnit.cwTime,
+                  assignee: prevUnit.cwAssignee,
+                  notes: "Replaced by rescheduled appointment",
+                })).catch(() => {});
+                appendUnitActivity(meta.precinctId, appt.blockId, appt.unitKey, mkEntry("cw_scheduled", {
+                  appointmentDate: appt.date,
+                  appointmentTime: appt.time,
+                  assignee: appt.assignee,
+                  notes: `Rescheduled from ${prevUnit.cwDate ?? ""}${prevUnit.cwTime ? " " + prevUnit.cwTime : ""}`.trim(),
+                })).catch(() => {});
+              }
             }
             const patch =
               appt.type === "CS"
