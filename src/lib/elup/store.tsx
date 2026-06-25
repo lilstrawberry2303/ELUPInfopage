@@ -6,7 +6,7 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder } from "@/lib/firebase";
+import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
 import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry } from "./types";
 
 function mkEntry(
@@ -88,7 +88,8 @@ type Action =
   | { type: "TOGGLE_SURVEY_GROUP"; group: DefaultSurveyGroup }
   | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
   | { type: "REMOVE_BLOCKED_DATE"; id: string }
-  | { type: "SEND_CS_REMINDER"; blockId: string; unitKey: string; date: string; notes?: string };
+  | { type: "SEND_CS_REMINDER"; blockId: string; unitKey: string; date: string; notes?: string }
+  | { type: "REMOVE_CS_REMINDER"; blockId: string; unitKey: string; reminderType: "legacy1" | "legacy2" | "new"; date?: string };
 
 // ---- Local-only UI state (never touches Firestore) ----
 interface LocalState {
@@ -590,6 +591,16 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
                 notes: action.notes ?? `Reminder #${remCount}`,
               }),
             ).catch((e: unknown) => console.warn("[elup] cs_reminder_sent log failed:", e));
+            break;
+          }
+
+          case "REMOVE_CS_REMINDER": {
+            const meta = blockMetasRef.current.get(action.blockId);
+            if (!meta) return;
+            await removeCsReminder(meta.precinctId, action.blockId, action.unitKey, {
+              type: action.reminderType,
+              date: action.date,
+            });
             break;
           }
 

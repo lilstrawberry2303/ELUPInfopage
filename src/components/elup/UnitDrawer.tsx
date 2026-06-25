@@ -49,6 +49,14 @@ function activityLabel(type: UnitActivityEntry["type"]): string {
   return map[type] ?? type;
 }
 
+function activityDot(type: UnitActivityEntry["type"]): string {
+  if (type === "cs_scheduled" || type === "cs_completed") return "bg-sky-500";
+  if (type === "cw_scheduled" || type === "cw_completed") return "bg-orange-500";
+  if (type === "cs_cancelled" || type === "cw_cancelled") return "bg-red-500";
+  if (type === "cs_reminder_sent") return "bg-amber-500";
+  return "bg-yellow-500";
+}
+
 function activityStyle(type: UnitActivityEntry["type"]): string {
   if (type === "cs_scheduled" || type === "cs_completed")
     return "border-sky-200 bg-sky-50 text-sky-900";
@@ -85,19 +93,26 @@ function ordinal(n: number): string {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
+type ReminderItem = { date: string; source: "legacy1" | "legacy2" | "new" };
+
 function CsReminderSection({
   u, blockId, unitKey, readOnly,
-}: { u: import("@/lib/elup/types").UnitData; blockId: string; unitKey: string; readOnly: boolean }) {
+}: { u: UnitData; blockId: string; unitKey: string; readOnly: boolean }) {
   const { dispatch } = useElup();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState("");
 
-  const allReminders: string[] = [
-    ...(u.csReminder1 ? [u.csReminder1] : []),
-    ...(u.csReminder2 ? [u.csReminder2] : []),
-    ...(u.csReminders ?? []),
+  const allReminders: ReminderItem[] = [
+    ...(u.csReminder1 ? [{ date: u.csReminder1, source: "legacy1" as const }] : []),
+    ...(u.csReminder2 ? [{ date: u.csReminder2, source: "legacy2" as const }] : []),
+    ...(u.csReminders ?? []).map((d) => ({ date: d, source: "new" as const })),
   ];
   const nextNum = allReminders.length + 1;
+
+  function removeReminder(item: ReminderItem) {
+    dispatch({ type: "REMOVE_CS_REMINDER", blockId, unitKey, reminderType: item.source, date: item.date });
+    toast.success("Reminder removed");
+  }
 
   return (
     <>
@@ -105,11 +120,21 @@ function CsReminderSection({
         <p className="text-xs text-muted-foreground">No reminders sent yet.</p>
       ) : (
         <div className="space-y-1 mb-2">
-          {allReminders.map((d, i) => (
+          {allReminders.map((item, i) => (
             <div key={i} className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
               <BellRing className="h-3 w-3 shrink-0" />
               <span className="font-medium">{ordinal(i + 1)} Reminder</span>
-              <span className="ml-auto">{d}</span>
+              <span className="flex-1 text-right">{item.date}</span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="rounded p-0.5 hover:bg-amber-200 text-amber-600"
+                  title="Remove reminder"
+                  onClick={() => removeReminder(item)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -128,16 +153,11 @@ function CsReminderSection({
             </DialogHeader>
             <div className="space-y-3 py-1">
               <p className="text-sm text-muted-foreground">
-                This will log the <span className="font-semibold text-foreground">{ordinal(nextNum)} reminder</span> for this unit in the History Log.
+                Logs the <span className="font-semibold text-foreground">{ordinal(nextNum)} reminder</span> for this unit in the History Log.
               </p>
               <div>
                 <Label>Reminder Date</Label>
-                <Input
-                  type="date"
-                  className="mt-1"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
+                <Input type="date" className="mt-1" value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
             </div>
             <DialogFooter>
@@ -332,9 +352,11 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                       ) : <Empty text="Not scheduled" />}
                     </Section>
 
-                    <Section icon={BellRing} title="CS Reminders">
-                      <CsReminderSection u={u} blockId={block.id} unitKey={unitKey} readOnly={readOnly} />
-                    </Section>
+                    {!u.csDate && (
+                      <Section icon={BellRing} title="CS Reminders">
+                        <CsReminderSection u={u} blockId={block.id} unitKey={unitKey} readOnly={readOnly} />
+                      </Section>
+                    )}
 
                     {/* Survey Findings */}
                     <Section icon={Zap} title="Survey Findings">
@@ -508,33 +530,29 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                   {(u.activityLog ?? []).length === 0 ? (
                     <Empty text="No activity recorded yet" />
                   ) : (
-                    <div className="space-y-2">
+                    <div className="divide-y rounded-md border overflow-hidden">
                       {[...(u.activityLog ?? [])]
                         .sort((a, b) => b.loggedAt.localeCompare(a.loggedAt))
                         .map((entry) => (
-                          <div
-                            key={entry.id}
-                            className={`rounded-md border px-3 py-2 text-xs ${activityStyle(entry.type)}`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-semibold">{activityLabel(entry.type)}</span>
-                              <span className="shrink-0 text-[10px] opacity-70">
-                                {new Date(entry.loggedAt).toLocaleString("en-SG", {
-                                  day: "2-digit", month: "short", year: "numeric",
-                                  hour: "2-digit", minute: "2-digit",
-                                })}
-                              </span>
+                          <div key={entry.id} className="flex items-start gap-2 px-2.5 py-1.5 text-[11px] bg-background hover:bg-muted/40">
+                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${activityDot(entry.type)}`} />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-semibold text-foreground">{activityLabel(entry.type)}</span>
+                              {(entry.appointmentDate || entry.assignee) && (
+                                <span className="ml-1.5 text-[10px] text-muted-foreground">
+                                  {[entry.appointmentDate, entry.appointmentTime, entry.assignee].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
+                              {entry.notes && (
+                                <span className="ml-1.5 text-[10px] italic text-muted-foreground">{entry.notes}</span>
+                              )}
                             </div>
-                            {(entry.appointmentDate || entry.assignee) && (
-                              <div className="mt-0.5 opacity-80">
-                                {entry.appointmentDate}
-                                {entry.appointmentTime ? ` · ${entry.appointmentTime}` : ""}
-                                {entry.assignee ? ` · ${entry.assignee}` : ""}
-                              </div>
-                            )}
-                            {entry.notes && (
-                              <div className="mt-0.5 italic opacity-70">{entry.notes}</div>
-                            )}
+                            <span className="shrink-0 text-[9px] text-muted-foreground/60 mt-0.5">
+                              {new Date(entry.loggedAt).toLocaleString("en-SG", {
+                                day: "2-digit", month: "short",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </span>
                           </div>
                         ))}
                     </div>

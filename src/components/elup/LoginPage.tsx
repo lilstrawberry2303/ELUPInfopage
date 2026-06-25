@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,12 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Zap } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
+import { loadLogoUrl } from "@/lib/firebase";
 
 export function LoginPage() {
   const { state, dispatch } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadLogoUrl().then(setLogoUrl).catch(() => {});
+  }, []);
 
   const login = () => {
     setError("");
@@ -35,9 +41,18 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
-            <Zap className="h-7 w-7" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Company Logo"
+              className="h-16 w-auto max-w-[200px] object-contain"
+              onError={() => setLogoUrl(null)}
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
+              <Zap className="h-7 w-7" />
+            </div>
+          )}
           <div>
             <h1 className="text-2xl font-bold tracking-tight">ELUP Management</h1>
             <p className="text-sm text-muted-foreground">Electrical Load Upgrading Programme</p>

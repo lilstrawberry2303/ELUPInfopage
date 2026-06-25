@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, deleteField,
-  collection, serverTimestamp, getDocs, query, orderBy, writeBatch, arrayUnion, type Firestore,
+  collection, serverTimestamp, getDocs, query, orderBy, writeBatch, arrayUnion, arrayRemove, type Firestore,
 } from "firebase/firestore";
 import type { UnitActivityEntry } from "@/lib/elup/types";
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
@@ -294,4 +294,34 @@ export async function appendCsReminder(
 ): Promise<void> {
   const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
   await setDoc(docRef, { csReminders: arrayUnion(date), updatedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Remove a CS reminder from a unit.
+ * Handles legacy fields (csReminder1/csReminder2) via deleteField(),
+ * and new csReminders array entries via arrayRemove().
+ */
+export async function removeCsReminder(
+  precinctId: string,
+  blockId: string,
+  unitKey: string,
+  target: { type: "legacy1" | "legacy2" | "new"; date?: string },
+): Promise<void> {
+  const docRef = doc(db(), "precincts", precinctId, "blocks", blockId, "units", unitKey);
+  if (target.type === "legacy1") {
+    await updateDoc(docRef, { csReminder1: deleteField(), updatedAt: serverTimestamp() });
+  } else if (target.type === "legacy2") {
+    await updateDoc(docRef, { csReminder2: deleteField(), updatedAt: serverTimestamp() });
+  } else if (target.type === "new" && target.date) {
+    await updateDoc(docRef, { csReminders: arrayRemove(target.date), updatedAt: serverTimestamp() });
+  }
+}
+
+/** Load the company logo URL from Firestore settings/app. Returns null if not set. */
+export async function loadLogoUrl(): Promise<string | null> {
+  try {
+    const snap = await getDoc(doc(db(), "settings", "app"));
+    if (snap.exists()) return (snap.data().logoUrl as string | null) ?? null;
+  } catch { /* ignore */ }
+  return null;
 }
