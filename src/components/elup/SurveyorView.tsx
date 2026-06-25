@@ -125,12 +125,12 @@ export function SurveyorView() {
                         {u.csTime ?? "—"}
                       </span>
                     </div>
-                    {/* Bottom row: date + button */}
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    {/* Bottom row: date + button (button full-width on mobile) */}
+                    <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                       <span className="text-xs text-muted-foreground">{u.csDate}</span>
                       <Button
                         size="sm"
-                        className="h-7 bg-sky-600 hover:bg-sky-700 text-xs px-3 shrink-0"
+                        className="h-8 w-full bg-sky-600 hover:bg-sky-700 text-xs sm:h-7 sm:w-auto sm:px-3"
                         onClick={() => {
                           setSelectedUnit(key);
                           setTimeout(
