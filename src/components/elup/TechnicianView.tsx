@@ -44,20 +44,20 @@ function ApptRow({
   return (
     <button
       onClick={onClick}
-      className={`mt-1.5 w-full rounded-md border bg-white px-3 py-2.5 text-sm text-left transition ${
+      className={`mt-1 w-full rounded-md border bg-white px-2.5 py-2 text-sm text-left transition ${
         active ? "border-orange-500 ring-1 ring-orange-200" : "hover:bg-muted"
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold leading-snug">{blockName} #{u.floor}-{u.unitNo}</div>
-          <div className="mt-0.5 text-xs text-muted-foreground">{precinct} · Lobby {u.lobby}</div>
+          <div className="text-[11px] font-bold leading-snug sm:text-sm">{blockName} #{u.floor}-{u.unitNo}</div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">{precinct} · Lobby {u.lobby}</div>
         </div>
-        <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-xs font-semibold text-orange-700">
+        <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 sm:text-xs">
           {u.cwTime ?? "—"}
         </span>
       </div>
-      <div className="mt-1 text-xs text-muted-foreground">{u.cwDate}</div>
+      <div className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">{u.cwDate}</div>
     </button>
   );
 }

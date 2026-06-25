@@ -113,24 +113,24 @@ export function SurveyorView() {
                 {(todaysAppts.length > 0 ? todaysAppts : upcomingAppts).map(([key, u]) => (
                   <div
                     key={key}
-                    className="mt-1.5 rounded-md border bg-white px-3 py-2.5 text-sm"
+                    className="mt-1 rounded-md border bg-white px-2.5 py-2 text-sm"
                   >
                     {/* Top row: time badge + unit number */}
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-1.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold leading-snug">{block.name} #{u.floor}-{u.unitNo}</div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">Lobby {u.lobby}{u.csAssignee ? ` · ${u.csAssignee}` : ""}</div>
+                        <div className="text-[11px] font-bold leading-snug sm:text-sm">{block.name} #{u.floor}-{u.unitNo}</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">Lobby {u.lobby}{u.csAssignee ? ` · ${u.csAssignee}` : ""}</div>
                       </div>
-                      <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-semibold text-sky-700">
+                      <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 sm:text-xs">
                         {u.csTime ?? "—"}
                       </span>
                     </div>
                     {/* Bottom row: date + button (button full-width on mobile) */}
-                    <div className="mt-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                      <span className="text-xs text-muted-foreground">{u.csDate}</span>
+                    <div className="mt-1.5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-[10px] text-muted-foreground sm:text-xs">{u.csDate}</span>
                       <Button
                         size="sm"
-                        className="h-8 w-full bg-sky-600 hover:bg-sky-700 text-xs sm:h-7 sm:w-auto sm:px-3"
+                        className="h-7 w-full bg-sky-600 hover:bg-sky-700 text-[10px] sm:h-7 sm:w-auto sm:px-3 sm:text-xs"
                         onClick={() => {
                           setSelectedUnit(key);
                           setTimeout(
