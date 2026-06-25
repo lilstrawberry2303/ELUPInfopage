@@ -20,7 +20,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   CalendarClock, CalendarPlus, ClipboardCheck, Pencil, Printer, Trash2, User, Filter, Zap,
-  ChevronLeft, ChevronRight, Search, BellRing, MapPin, Building2,
+  ChevronLeft, ChevronRight, Search, MapPin, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { UnitData } from "@/lib/elup/types";
@@ -404,16 +404,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                       Unassigned
                     </Badge>
                   )}
-                  {isCS && ((unit.csReminders?.length ?? 0) > 0 || unit.csReminder1 || unit.csReminder2) && (
-                    <span className="ml-1 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800">
-                      <BellRing className="h-2.5 w-2.5" />
-                      {[
-                        ...(unit.csReminder1 ? [unit.csReminder1] : []),
-                        ...(unit.csReminder2 ? [unit.csReminder2] : []),
-                        ...(unit.csReminders ?? []),
-                      ].join(" / ")}
-                    </span>
-                  )}
+
                 </div>
                 <div className="flex items-center gap-1">
                   {isCS && onConductSurvey && (
@@ -453,6 +444,18 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                         patch: isCS
                           ? { csDate: fmtDmy(date), csTime: time, csAssignee: assignee, csNotes: notes }
                           : { cwDate: fmtDmy(date), cwTime: time, cwAssignee: assignee, cwNotes: notes },
+                      });
+                      dispatch({
+                        type: "ADD_APPOINTMENT",
+                        appt: {
+                          id: crypto.randomUUID(),
+                          blockId,
+                          unitKey,
+                          type: mode,
+                          date: fmtDmy(date),
+                          time,
+                          assignee,
+                        },
                       });
                       toast.success("Appointment updated");
                     }}
