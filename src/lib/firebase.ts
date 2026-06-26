@@ -103,11 +103,100 @@ export async function updateOwnPassword(newPassword: string): Promise<void> {
   const user = auth().currentUser;
   if (!user) throw new Error("No signed-in Firebase Auth user");
   await fbUpdatePassword(user, newPassword);
+  // Keep the stored password in Firestore in sync so Force Reset & Delete continue to work
+  try {
+    await updateDoc(doc(db(), "users", user.uid), { password: newPassword });
+  } catch { /* non-fatal — Firestore sync best-effort */ }
+}
+
+/**
+ * Change a staff member's username using a delete-and-recreate strategy.
+ * Because the Firebase Auth email is `username@elup.local`, a username change
+ * requires creating a brand-new Auth account and migrating the Firestore profile.
+ *
+ * Strategy (identical to forceResetPassword but for a new email, same password):
+ *  1. Secondary app signs in as the user to verify/delete their old Auth account.
+ *  2. Third app creates a new Auth account with the new email and the same password.
+ *  3. Firestore profile is migrated to the new UID with the updated username.
+ *
+ * Falls back to a simple Firestore field update for legacy accounts (no uid).
+ */
+export async function changeUsernameWithAuth(params: {
+  oldUid: string;
+  oldUsername: string;
+  newUsername: string;
+  password: string;
+}): Promise<{ newUid: string }> {
+  const { oldUid, oldUsername, newUsername, password } = params;
+  const oldEmail = toVirtualEmail(oldUsername);
+  const newEmail = toVirtualEmail(newUsername);
+  const tag = Date.now();
+
+  const signInApp  = initializeApp(firebaseConfig, `cu-signin-${tag}`);
+  const createApp  = initializeApp(firebaseConfig, `cu-create-${tag}`);
+  const signInAuth = getAuth(signInApp);
+  const createAuth = getAuth(createApp);
+
+  try {
+    // ── Step 1: Authenticate as the target user ───────────────────────────────
+    let targetCred: UserCredential;
+    try {
+      targetCred = await signInWithEmailAndPassword(signInAuth, oldEmail, password);
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code ?? "";
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
+        throw new Error(
+          "Stored password is incorrect — username not changed. " +
+          "Use Force Reset to resync the stored password first.",
+        );
+      }
+      throw e;
+    }
+
+    // ── Step 2: Read old Firestore profile ────────────────────────────────────
+    const oldRef  = doc(db(), "users", oldUid);
+    const oldSnap = await getDoc(oldRef);
+    const oldData = oldSnap.exists() ? oldSnap.data() : {};
+
+    // ── Step 3: Delete old Auth account ──────────────────────────────────────
+    await deleteUser(targetCred.user);
+
+    // ── Step 4: Create new Auth account (new email, same password) ───────────
+    let newUid: string;
+    try {
+      const newCred = await createUserWithEmailAndPassword(createAuth, newEmail, password);
+      newUid = newCred.user.uid;
+    } catch {
+      throw new Error(
+        `Old Auth account was removed but the new one could not be created. ` +
+        `Please add the user in Firebase Console → Authentication ` +
+        `with email ${newEmail} and the existing password.`,
+      );
+    }
+
+    // ── Step 5: Migrate Firestore profile ─────────────────────────────────────
+    const { tempPassword: _tp, uid: _ou, username: _un, ...rest } =
+      oldData as Record<string, unknown>;
+    const newRef = doc(db(), "users", newUid);
+    await setDoc(newRef, {
+      ...clean(rest),
+      uid:       newUid,
+      username:  newUsername.trim().toLowerCase(),
+      password,
+      updatedAt: serverTimestamp(),
+    });
+    await deleteDoc(oldRef);
+
+    return { newUid };
+  } finally {
+    try { await signInApp.delete(); } catch { /* ignore */ }
+    try { await createApp.delete(); } catch { /* ignore */ }
+  }
 }
 
 /**
  * Patch the `username` field in the user's Firestore document.
- * Works for both new docs (ID = uid) and legacy docs (ID = old username).
+ * Used as a fallback for legacy accounts that have no Firebase Auth uid.
  */
 export async function updateUsernameInFirestore(
   docId: string,
