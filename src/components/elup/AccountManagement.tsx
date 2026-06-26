@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useElup } from "@/lib/elup/store";
-import { updateUsernameInFirestore, setTempPassword, forceResetPassword } from "@/lib/firebase";
+import { updateUsernameInFirestore, forceResetPassword, deleteUserCompletely } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,7 @@ import {
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { UserPlus, Pencil, Trash2, Users, Eye, EyeOff, Info, KeyRound, Loader2 } from "lucide-react";
+import { UserPlus, Pencil, Trash2, Users, Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Account } from "@/lib/elup/types";
 
@@ -175,13 +170,10 @@ function EditAccountDialog({ account }: { account: Account }) {
   const [name, setName] = useState(account.name);
   const [username, setUsername] = useState(account.username);
   const [role, setRole] = useState<Account["role"]>(account.role);
-  const [newPassword, setNewPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const reset = () => {
-    setName(account.name); setUsername(account.username);
-    setRole(account.role); setNewPassword(""); setShowPw(false);
+    setName(account.name); setUsername(account.username); setRole(account.role);
   };
 
   const submit = async () => {
@@ -196,16 +188,7 @@ function EditAccountDialog({ account }: { account: Account }) {
       if (usernameChanged) patch.username = newUsername;
       dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch });
       if (usernameChanged) await updateUsernameInFirestore(account.id, newUsername);
-
-      if (newPassword.trim()) {
-        await setTempPassword(account.id, newPassword.trim());
-        toast.success(
-          `Password reset queued for ${newName}. They will be prompted to use the new password after their next sign-in with their current one.`,
-          { duration: 7000 },
-        );
-      } else {
-        toast.success("Account updated");
-      }
+      toast.success("Account updated");
       setOpen(false);
     } catch (e: unknown) {
       toast.error("Failed to save", { description: String((e as Error)?.message ?? e) });
@@ -250,36 +233,6 @@ function EditAccountDialog({ account }: { account: Account }) {
                 ⚠ The login username will change — the user must sign in with the new username after this.
               </p>
             )}
-          </div>
-          <div className="border-t pt-3">
-            <Label>
-              Reset password{" "}
-              <span className="font-normal text-muted-foreground">(leave blank to keep unchanged)</span>
-            </Label>
-            <div className="relative mt-1.5">
-              <Input
-                type={showPw ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password for this user"
-                className="pr-9"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw((s) => !s)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <div className="mt-2 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                The new password activates automatically the next time{" "}
-                <strong>{account.name}</strong> signs in with their current password.
-                Use <strong>Force Reset</strong> (key icon) if they've forgotten their current password.
-              </span>
-            </div>
           </div>
         </div>
         <DialogFooter>
@@ -410,17 +363,9 @@ function ForceResetDialog({ account }: { account: Account }) {
           </>
         ) : (
           <>
-            <div className="space-y-3 text-sm">
-              <p>You are about to:</p>
-              <ol className="ml-4 list-decimal space-y-1 text-muted-foreground">
-                <li>Delete <strong>{account.name}</strong>'s existing Firebase Auth account</li>
-                <li>Create a new Auth account with the same username and your chosen password</li>
-                <li>Migrate their Firestore profile to the new account UID</li>
-              </ol>
-              <p className="font-medium text-destructive">
-                They will be signed out of any active sessions immediately.
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Confirm reset password for <strong>{account.name}</strong>.
+            </p>
 
             {busy && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -438,7 +383,7 @@ function ForceResetDialog({ account }: { account: Account }) {
                 onClick={handleConfirm}
                 disabled={busy}
               >
-                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Resetting…</> : "Confirm Force Reset"}
+                {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Resetting…</> : "Confirm Reset"}
               </Button>
             </DialogFooter>
           </>
@@ -452,34 +397,60 @@ function ForceResetDialog({ account }: { account: Account }) {
 
 function DeleteAccountDialog({ account }: { account: Account }) {
   const { dispatch } = useElup();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handleDelete = async () => {
+    setBusy(true);
+    try {
+      if (account.uid && account.password) {
+        await deleteUserCompletely({
+          uid:      account.uid,
+          username: account.username,
+          password: account.password,
+        });
+      } else {
+        dispatch({ type: "DELETE_ACCOUNT", id: account.id });
+      }
+      toast.success(`${account.name}'s account deleted`);
+      setOpen(false);
+    } catch (e: unknown) {
+      toast.error("Delete failed", { description: (e as Error)?.message ?? String(e), duration: 8000 });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
+    <Dialog open={open} onOpenChange={(o) => { if (!busy) setOpen(o); }}>
+      <DialogTrigger asChild>
         <Button size="sm" variant="ghost" title="Delete account">
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete account?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently remove <strong>{account.name}</strong> (@{account.username}) from the app.
-            You will also need to delete <strong>{account.username}@elup.local</strong> from Firebase Console → Authentication to fully revoke their access.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete account?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Confirm deletion of account for <strong>{account.name}</strong>.
+        </p>
+        {busy && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Deleting…
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
+          <Button
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onClick={() => {
-              dispatch({ type: "DELETE_ACCOUNT", id: account.id });
-              toast.success(`${account.name}'s account deleted`);
-            }}
+            onClick={handleDelete}
+            disabled={busy}
           >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            {busy ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting…</> : "Delete"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

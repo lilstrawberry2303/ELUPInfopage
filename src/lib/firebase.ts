@@ -340,7 +340,8 @@ export async function forceResetPassword(params: {
     const newRef = doc(db(), "users", newUid);
     await setDoc(newRef, {
       ...clean(rest),
-      uid:       newUid,
+      uid:      newUid,
+      password: newPassword,
       updatedAt: serverTimestamp(),
     });
     await deleteDoc(oldRef);
@@ -350,6 +351,42 @@ export async function forceResetPassword(params: {
     // Always clean up secondary app instances
     try { await signInApp.delete(); }  catch { /* ignore */ }
     try { await createApp.delete(); }  catch { /* ignore */ }
+  }
+}
+
+/**
+ * Delete a staff member's Firebase Auth account using their stored password,
+ * then delete their Firestore profile document.
+ * Uses a secondary app instance so the manager's session is unaffected.
+ */
+export async function deleteUserCompletely(params: {
+  uid: string;
+  username: string;
+  password: string;
+}): Promise<void> {
+  const { uid, username, password } = params;
+  const email = toVirtualEmail(username);
+  const tag = Date.now();
+  const signInApp  = initializeApp(firebaseConfig, `del-${tag}`);
+  const signInAuth = getAuth(signInApp);
+  try {
+    let cred: UserCredential;
+    try {
+      cred = await signInWithEmailAndPassword(signInAuth, email, password);
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code ?? "";
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
+        throw new Error(
+          "Stored password is incorrect — Auth account was not deleted. " +
+          "Use Force Reset to update the stored password first.",
+        );
+      }
+      throw e;
+    }
+    await deleteUser(cred.user);
+    await deleteDoc(doc(db(), "users", uid));
+  } finally {
+    try { await signInApp.delete(); } catch { /* ignore */ }
   }
 }
 
