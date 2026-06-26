@@ -29,10 +29,8 @@ export function LoginPage() {
     }
     setLoading(true);
     try {
-      // Attempt Firebase Auth sign-in first (new accounts use virtual email scheme)
       const fbCred = await loginWithUsername(u, password);
       const uid = fbCred.user.uid;
-      // Find matching profile from the Firestore credentials already loaded
       const profile =
         state.credentials.find((c) => c.uid === uid) ??
         state.credentials.find((c) => c.username.toLowerCase() === u);
@@ -52,22 +50,7 @@ export function LoginPage() {
         setError("Account profile not found. Please contact your manager.");
       }
     } catch {
-      // Firebase Auth failed — fall back to Firestore plain-password check (legacy accounts)
-      const cred = state.credentials.find(
-        (c) =>
-          c.username.toLowerCase() === u &&
-          c.password !== "" &&
-          c.password === password,
-      );
-      if (cred) {
-        dispatch({
-          type: "LOGIN",
-          user: { org: cred.org, username: cred.username, displayName: cred.displayName, role: cred.role },
-        });
-        toast.success(`Welcome, ${cred.displayName}`);
-      } else {
-        setError("Invalid username or password.");
-      }
+      setError("Invalid username or password.");
     } finally {
       setLoading(false);
     }

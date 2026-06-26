@@ -206,32 +206,12 @@ export async function logActivity(
 }
 
 /**
- * Create or overwrite a user account document.
+ * Delete a user account document by its Firestore document ID (UID for Auth accounts).
  *
- * Path: /users/{username}  (document ID is the lowercased username)
+ * Path: /users/{docId}
  */
-export async function onboardUser(account: {
-  username: string;
-  password: string;
-  role: string;
-  name?: string;
-}): Promise<void> {
-  const username = account.username.trim().toLowerCase();
-  await setDoc(doc(db(), "users", username), clean({
-    username,
-    password: account.password,
-    role: account.role,
-    name: account.name ?? username,
-  }));
-}
-
-/**
- * Delete a user account document.
- *
- * Path: /users/{username}
- */
-export async function removeUser(username: string): Promise<void> {
-  await deleteDoc(doc(db(), "users", username.trim().toLowerCase()));
+export async function removeUser(docId: string): Promise<void> {
+  await deleteDoc(doc(db(), "users", docId.trim()));
 }
 
 /** Upload a base64 PNG data URL to Firebase Storage. Returns the download URL. */
