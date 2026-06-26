@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { collection, doc, onSnapshot } from "firebase/firestore";
-import { db } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { db, auth } from "./firebase";
 import type { Role } from "./elup/types";
 
 export interface Credential {
   org: string;
+  uid?: string;
   username: string;
   password: string;
   role: Role;
@@ -13,6 +15,7 @@ export interface Credential {
 
 export interface AppUser {
   org: string;
+  uid?: string;
   username: string;
   displayName: string;
   role: Role;
@@ -35,7 +38,7 @@ type AppAction =
   | { type: "SET_LOGO"; url: string | null }
   | { type: "SET_DARK_MODE"; dark: boolean }
   | { type: "SET_CREDENTIALS"; credentials: Credential[] }
-  | { type: "UPDATE_CREDENTIAL"; org: string; oldUsername: string; newUsername: string; newPassword: string };
+  | { type: "UPDATE_CREDENTIAL"; org: string; uid?: string; oldUsername: string; newUsername: string; newPassword: string };
 
 const SESSION_KEY = "elup_session";
 
@@ -141,6 +144,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Sync login credentials from Firestore /users collection.
+  // Supports both legacy docs (/users/{username} with password field) and
+  // Firebase Auth docs (/users/{uid} with uid field, no password).
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db(), "users"),
@@ -149,14 +154,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .map((d) => {
             const data = d.data();
             const role = data.role as Role | undefined;
-            if (!role || !data.password) return null;
-            return {
+            if (!role) return null;
+            const uid = data.uid as string | undefined;
+            const rec: Credential = {
               org:         "HS",
-              username:    data.username ?? d.id,
-              password:    data.password as string,
+              username:    (data.username as string | undefined) ?? d.id,
+              password:    (data.password as string | undefined) ?? "",
               role,
               displayName: (data.name as string | undefined) ?? (data.username as string | undefined) ?? d.id,
-            } satisfies Credential;
+            };
+            if (uid) rec.uid = uid;
+            return rec;
           })
           .filter((c): c is Credential => c !== null);
 
@@ -164,6 +172,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       (err) => console.error("[AppContext] users listener:", err),
     );
+    return () => unsub();
+  }, []);
+
+  // Mirror Firebase Auth state into the app session.
+  // When Firebase Auth has a current user but the app has no session
+  // (e.g. after a page refresh with a valid Auth token), attempt to restore
+  // from localStorage first; if that fails we rely on the Auth listener here.
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth(), () => {
+      // Auth state changes are handled via localStorage session + loginWithUsername;
+      // this listener is intentionally kept as a no-op hook to initialise the
+      // Auth SDK early so currentUser is available synchronously in other calls.
+    });
     return () => unsub();
   }, []);
 

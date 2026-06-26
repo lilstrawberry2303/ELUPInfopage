@@ -8,8 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Settings, Moon, Sun, Upload, X, KeyRound, Check, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
-import { doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db, uploadLogo, saveLogoUrl } from "@/lib/firebase";
+import {
+  auth, uploadLogo, saveLogoUrl,
+  reauthenticate, updateOwnPassword, updateUsernameInFirestore,
+} from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export function SettingsDialog() {
   const { state, dispatch } = useApp();
@@ -21,6 +25,7 @@ export function SettingsDialog() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,81 +46,130 @@ export function SettingsDialog() {
 
   const saveCredentials = async () => {
     const user = state.user!;
-
-    // Verify current password
-    const existing = state.credentials.find(
-      (c) => c.org === user.org && c.username.toLowerCase() === user.username.toLowerCase(),
-    );
-    if (!existing || existing.password !== currentPassword) {
-      toast.error("Current password is incorrect.");
+    if (!currentPassword) {
+      toast.error("Current password is required to save changes.");
       return;
     }
-
-    const targetUsername = newUsername.trim() || user.username;
-    const targetPassword = newPassword || existing.password;
-
     if (newPassword && newPassword !== confirmPassword) {
       toast.error("New passwords do not match.");
       return;
     }
-    if (newPassword && newPassword.length < 4) {
-      toast.error("New password must be at least 4 characters.");
+    if (newPassword && newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters.");
       return;
     }
 
-    // Check username conflict (someone else already has that username)
-    if (
-      newUsername.trim() &&
-      newUsername.trim().toLowerCase() !== user.username.toLowerCase() &&
-      state.credentials.some(
-        (c) => c.username.toLowerCase() === newUsername.trim().toLowerCase() && c.org === user.org,
-      )
-    ) {
+    const targetUsername = newUsername.trim().toLowerCase() || user.username.toLowerCase();
+    const usernameChanged = targetUsername !== user.username.toLowerCase();
+
+    // Check username conflict
+    if (usernameChanged && state.credentials.some(
+      (c) => c.username.toLowerCase() === targetUsername && c.org === user.org,
+    )) {
       toast.error("That username is already taken.");
       return;
     }
 
-    // Sync to Firebase
+    setSaving(true);
     try {
-      const oldDocId = user.username.trim().toLowerCase();
-      const newDocId = targetUsername.trim().toLowerCase();
+      const firebaseUser = auth().currentUser;
 
-      if (oldDocId !== newDocId) {
-        // Username changed: create new doc, delete old one
-        await setDoc(doc(db(), "users", newDocId), {
-          username: newDocId,
-          password: targetPassword,
-          role: existing.role,
-          name: existing.displayName,
-        });
-        await deleteDoc(doc(db(), "users", oldDocId));
+      // Step 1 — verify current password
+      if (firebaseUser) {
+        // Firebase Auth account: reauthenticate properly
+        try {
+          await reauthenticate(currentPassword);
+        } catch {
+          toast.error("Current password is incorrect.");
+          return;
+        }
       } else {
-        // Just update password
-        await setDoc(doc(db(), "users", oldDocId), {
-          username: oldDocId,
-          password: targetPassword,
-          role: existing.role,
-          name: existing.displayName,
+        // Legacy account: compare against Firestore credential
+        const existing = state.credentials.find(
+          (c) => c.org === user.org && c.username.toLowerCase() === user.username.toLowerCase(),
+        );
+        if (!existing || existing.password !== currentPassword) {
+          toast.error("Current password is incorrect.");
+          return;
+        }
+      }
+
+      // Step 2 — update username in Firestore (if changed)
+      if (usernameChanged) {
+        const docId = user.uid ?? user.username.toLowerCase();
+        if (firebaseUser) {
+          await updateUsernameInFirestore(docId, targetUsername);
+        } else {
+          // Legacy: create new doc, remove old
+          const existing = state.credentials.find(
+            (c) => c.org === user.org && c.username.toLowerCase() === user.username.toLowerCase(),
+          )!;
+          await setDoc(doc(db(), "users", targetUsername), {
+            username: targetUsername,
+            password: newPassword || existing.password,
+            role: existing.role,
+            name: existing.displayName,
+          });
+          const { deleteDoc } = await import("firebase/firestore");
+          await deleteDoc(doc(db(), "users", user.username.toLowerCase()));
+        }
+        dispatch({
+          type: "UPDATE_CREDENTIAL",
+          org: user.org,
+          oldUsername: user.username,
+          newUsername: targetUsername,
+          newPassword: newPassword || currentPassword,
         });
       }
+
+      // Step 3 — update password
+      if (newPassword) {
+        if (firebaseUser) {
+          try {
+            await updateOwnPassword(newPassword);
+          } catch (e: any) {
+            if ((e?.code as string) === "auth/requires-recent-login") {
+              toast.error(
+                "Your session has expired for security reasons. Please sign out and sign back in, then try changing your password again.",
+                { duration: 8000 },
+              );
+              return;
+            }
+            throw e;
+          }
+        } else {
+          // Legacy: update password field in Firestore
+          const existing = state.credentials.find(
+            (c) => c.org === user.org && c.username.toLowerCase() === (usernameChanged ? targetUsername : user.username.toLowerCase()),
+          );
+          if (existing) {
+            await setDoc(doc(db(), "users", usernameChanged ? targetUsername : user.username.toLowerCase()), {
+              username: usernameChanged ? targetUsername : user.username.toLowerCase(),
+              password: newPassword,
+              role: existing.role,
+              name: existing.displayName,
+            });
+          }
+          dispatch({
+            type: "UPDATE_CREDENTIAL",
+            org: user.org,
+            oldUsername: usernameChanged ? targetUsername : user.username,
+            newUsername: usernameChanged ? targetUsername : user.username,
+            newPassword,
+          });
+        }
+      }
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setNewUsername("");
+      toast.success("Account details updated.");
     } catch (e: any) {
-      toast.error("Failed to save to Firebase", { description: String(e?.message ?? e) });
-      return;
+      toast.error("Failed to save changes", { description: String(e?.message ?? e) });
+    } finally {
+      setSaving(false);
     }
-
-    dispatch({
-      type: "UPDATE_CREDENTIAL",
-      org: user.org,
-      oldUsername: user.username,
-      newUsername: targetUsername,
-      newPassword: targetPassword,
-    });
-
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setNewUsername("");
-    toast.success("Account details updated.");
   };
 
   return (
@@ -265,10 +319,14 @@ export function SettingsDialog() {
               <Button
                 size="sm"
                 className="w-full gap-1.5"
-                disabled={!currentPassword}
+                disabled={!currentPassword || saving}
                 onClick={saveCredentials}
               >
-                <Check className="h-3.5 w-3.5" /> Save Changes
+                {saving ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</>
+                ) : (
+                  <><Check className="h-3.5 w-3.5" /> Save Changes</>
+                )}
               </Button>
             </div>
           </div>

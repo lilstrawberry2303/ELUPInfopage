@@ -3,6 +3,11 @@ import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, deleteField,
   collection, serverTimestamp, getDocs, query, orderBy, writeBatch, arrayUnion, arrayRemove, type Firestore,
 } from "firebase/firestore";
+import {
+  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  updatePassword as fbUpdatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  signOut, type Auth, type UserCredential,
+} from "firebase/auth";
 import type { UnitActivityEntry } from "@/lib/elup/types";
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
 
@@ -17,6 +22,7 @@ const firebaseConfig = {
 
 let _app: FirebaseApp | null = null;
 let _db: Firestore | null = null;
+let _auth: Auth | null = null;
 let _storage: FirebaseStorage | null = null;
 
 export function fbApp(): FirebaseApp {
@@ -28,9 +34,92 @@ export function db(): Firestore {
   if (!_db) _db = getFirestore(fbApp());
   return _db;
 }
+export function auth(): Auth {
+  if (!_auth) _auth = getAuth(fbApp());
+  return _auth;
+}
 export function storage(): FirebaseStorage {
   if (!_storage) _storage = getStorage(fbApp());
   return _storage;
+}
+
+/** Convert a plain username to a virtual Firebase Auth email. */
+function toVirtualEmail(username: string): string {
+  return `${username.toLowerCase().trim()}@elup.local`;
+}
+
+/**
+ * Sign in via Firebase Authentication using the virtual email scheme.
+ * Throws FirebaseError on bad credentials or network errors.
+ */
+export async function loginWithUsername(
+  username: string,
+  password: string,
+): Promise<UserCredential> {
+  return signInWithEmailAndPassword(auth(), toVirtualEmail(username), password);
+}
+
+/**
+ * Create a Firebase Auth account + write the Firestore profile document.
+ * Path: /users/{uid}  (document ID = Firebase Auth UID)
+ */
+export async function onboardUserWithAuth(account: {
+  username: string;
+  password: string;
+  role: string;
+  name?: string;
+}): Promise<{ uid: string }> {
+  const username = account.username.trim().toLowerCase();
+  const cred = await createUserWithEmailAndPassword(auth(), toVirtualEmail(username), account.password);
+  const uid = cred.user.uid;
+  await setDoc(doc(db(), "users", uid), clean({
+    uid,
+    username,
+    role: account.role,
+    name: account.name ?? username,
+  }));
+  return { uid };
+}
+
+/**
+ * Re-authenticate the currently signed-in user.
+ * Required before sensitive operations (password change) after a long session.
+ * Throws FirebaseError (auth/wrong-password | auth/invalid-credential) on mismatch.
+ */
+export async function reauthenticate(currentPassword: string): Promise<void> {
+  const user = auth().currentUser;
+  if (!user?.email) throw new Error("No signed-in Firebase Auth user");
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+}
+
+/**
+ * Update the current user's own password via Firebase Auth.
+ * Throws auth/requires-recent-login if the session is too old — callers must
+ * catch that code and prompt the user to re-authenticate.
+ */
+export async function updateOwnPassword(newPassword: string): Promise<void> {
+  const user = auth().currentUser;
+  if (!user) throw new Error("No signed-in Firebase Auth user");
+  await fbUpdatePassword(user, newPassword);
+}
+
+/**
+ * Patch the `username` field in the user's Firestore document.
+ * Works for both new docs (ID = uid) and legacy docs (ID = old username).
+ */
+export async function updateUsernameInFirestore(
+  docId: string,
+  newUsername: string,
+): Promise<void> {
+  await updateDoc(doc(db(), "users", docId), {
+    username: newUsername.trim().toLowerCase(),
+  });
+}
+
+/** Sign out the currently authenticated user from Firebase Auth. */
+export async function signOutUser(): Promise<void> {
+  await signOut(auth());
 }
 
 /** Strip undefined values — Firestore rejects them */

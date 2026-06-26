@@ -1,0 +1,1 @@
+- [Firebase Auth migration](firebase-auth-migration.md) — virtual email trick `${username}@elup.local`; dual-path login (Auth first, Firestore fallback for legacy); client SDK cannot change another user's password.

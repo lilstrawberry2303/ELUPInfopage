@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useElup } from "@/lib/elup/store";
+import { updateUsernameInFirestore, updateOwnPassword, auth } from "@/lib/firebase";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -181,7 +184,9 @@ function EditAccountDialog({ account }: { account: Account }) {
     setShowPw(false);
   };
 
-  const submit = () => {
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
     const newUsername = username.trim().toLowerCase();
     const newName = name.trim();
 
@@ -190,30 +195,55 @@ function EditAccountDialog({ account }: { account: Account }) {
       return;
     }
 
-    const usernameChanged = newUsername !== account.username.trim().toLowerCase();
+    setSaving(true);
+    try {
+      const usernameChanged = newUsername !== account.username.trim().toLowerCase();
 
-    if (usernameChanged) {
-      // Delete old doc (doc ID = old username) and create a new one
-      dispatch({ type: "DELETE_ACCOUNT", id: account.id });
-      dispatch({
-        type: "ADD_ACCOUNT",
-        account: {
-          id: newUsername,
-          name: newName,
-          username: newUsername,
-          role,
-          password: password.trim() || account.password,
-        },
-      });
-    } else {
-      // Same username — patch in place
-      const patch: Partial<Account> = { name: newName, role };
-      if (password.trim()) patch.password = password.trim();
-      dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch });
+      if (account.uid) {
+        // Firebase Auth account — doc ID is the uid, so username changes are field updates only
+        const patch: Record<string, unknown> = { name: newName, role };
+        if (usernameChanged) patch.username = newUsername;
+        dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch });
+        if (usernameChanged) {
+          await updateUsernameInFirestore(account.id, newUsername);
+        }
+        if (password.trim()) {
+          // Managers cannot change another user's Firebase Auth password from the client SDK.
+          // Update the legacy Firestore password field for backward compat, but show a note.
+          await updateDoc(doc(db(), "users", account.id), { password: password.trim() });
+          toast.info(
+            "Firestore password record updated. Note: Firebase Auth password can only be changed by the account holder from their own Settings page.",
+            { duration: 6000 },
+          );
+        }
+      } else {
+        // Legacy account — doc ID is the username; username change requires delete+recreate
+        if (usernameChanged) {
+          dispatch({ type: "DELETE_ACCOUNT", id: account.id });
+          dispatch({
+            type: "ADD_ACCOUNT",
+            account: {
+              id: newUsername,
+              name: newName,
+              username: newUsername,
+              role,
+              password: password.trim() || account.password,
+            },
+          });
+        } else {
+          const patch: Partial<Account> = { name: newName, role };
+          if (password.trim()) patch.password = password.trim();
+          dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch });
+        }
+      }
+
+      toast.success("Account updated");
+      setOpen(false);
+    } catch (e: unknown) {
+      toast.error("Failed to save", { description: String((e as Error)?.message ?? e) });
+    } finally {
+      setSaving(false);
     }
-
-    toast.success("Account updated");
-    setOpen(false);
   };
 
   return (
@@ -257,12 +287,21 @@ function EditAccountDialog({ account }: { account: Account }) {
             />
             {username.trim().toLowerCase() !== account.username.trim().toLowerCase() && (
               <p className="mt-1 text-[11px] text-amber-600">
-                ⚠ Changing the username will delete the old account and create a new one.
+                {account.uid
+                  ? "⚠ The login email in Firebase Auth uses the username — the user will need to sign in with the new username after this change."
+                  : "⚠ Changing the username will delete the old account and create a new one."}
               </p>
             )}
           </div>
           <div>
-            <Label>New password <span className="text-muted-foreground">(leave blank to keep current)</span></Label>
+            <Label>
+              New password{" "}
+              <span className="text-muted-foreground">
+                {account.uid
+                  ? "(updates Firestore record only — Firebase Auth password requires self-service)"
+                  : "(leave blank to keep current)"}
+              </span>
+            </Label>
             <div className="relative">
               <Input
                 type={showPw ? "text" : "password"}
@@ -283,7 +322,9 @@ function EditAccountDialog({ account }: { account: Account }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button className="bg-sky-600 hover:bg-sky-700" onClick={submit}>Save changes</Button>
+          <Button className="bg-sky-600 hover:bg-sky-700" onClick={submit} disabled={saving}>
+            {saving ? "Saving…" : "Save changes"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

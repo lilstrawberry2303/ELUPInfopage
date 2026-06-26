@@ -145,6 +145,7 @@ export interface Appointment {
 
 export interface Account {
   id: string;
+  uid?: string;
   name: string;
   role: "manager" | "surveyor" | "technician" | "client";
   username: string;

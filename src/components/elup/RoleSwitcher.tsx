@@ -1,4 +1,5 @@
 import { Zap } from "lucide-react";
+import { signOutUser } from "@/lib/firebase";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { SettingsDialog } from "./SettingsDialog";
@@ -18,6 +19,7 @@ export function RoleSwitcher() {
 
   const logout = () => {
     dispatch({ type: "LOGOUT" });
+    signOutUser().catch(() => {});
     toast.info("Signed out");
   };
 

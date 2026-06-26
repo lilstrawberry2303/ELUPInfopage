@@ -3,38 +3,74 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Zap } from "lucide-react";
+import { Zap, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
-import { loadLogoUrl } from "@/lib/firebase";
+import { loadLogoUrl, loginWithUsername } from "@/lib/firebase";
 
 export function LoginPage() {
   const { state, dispatch } = useApp();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadLogoUrl().then(setLogoUrl).catch(() => {});
   }, []);
 
-  const login = () => {
+  const login = async () => {
     setError("");
-    const cred = state.credentials.find(
-      (c) =>
-        c.username.toLowerCase() === username.trim().toLowerCase() &&
-        c.password === password,
-    );
-    if (!cred) {
-      setError("Invalid username or password.");
+    const u = username.trim().toLowerCase();
+    if (!u || !password) {
+      setError("Please enter your username and password.");
       return;
     }
-    dispatch({
-      type: "LOGIN",
-      user: { org: cred.org, username: cred.username, displayName: cred.displayName, role: cred.role },
-    });
-    toast.success(`Welcome, ${cred.displayName}`);
+    setLoading(true);
+    try {
+      // Attempt Firebase Auth sign-in first (new accounts use virtual email scheme)
+      const fbCred = await loginWithUsername(u, password);
+      const uid = fbCred.user.uid;
+      // Find matching profile from the Firestore credentials already loaded
+      const profile =
+        state.credentials.find((c) => c.uid === uid) ??
+        state.credentials.find((c) => c.username.toLowerCase() === u);
+      if (profile) {
+        dispatch({
+          type: "LOGIN",
+          user: {
+            org: profile.org,
+            uid,
+            username: profile.username,
+            displayName: profile.displayName,
+            role: profile.role,
+          },
+        });
+        toast.success(`Welcome, ${profile.displayName}`);
+      } else {
+        setError("Account profile not found. Please contact your manager.");
+      }
+    } catch {
+      // Firebase Auth failed — fall back to Firestore plain-password check (legacy accounts)
+      const cred = state.credentials.find(
+        (c) =>
+          c.username.toLowerCase() === u &&
+          c.password !== "" &&
+          c.password === password,
+      );
+      if (cred) {
+        dispatch({
+          type: "LOGIN",
+          user: { org: cred.org, username: cred.username, displayName: cred.displayName, role: cred.role },
+        });
+        toast.success(`Welcome, ${cred.displayName}`);
+      } else {
+        setError("Invalid username or password.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -98,8 +134,12 @@ export function LoginPage() {
                   {error}
                 </p>
               )}
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in…</>
+                ) : (
+                  "Sign In"
+                )}
               </Button>
             </form>
           </CardContent>

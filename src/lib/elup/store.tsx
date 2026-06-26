@@ -6,7 +6,7 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
+import { db, onboardUserWithAuth, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
 import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry } from "./types";
 
 function mkEntry(
@@ -313,10 +313,11 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             const data = d.data();
             return {
               id:       d.id,
-              name:     data.name     ?? d.id,
-              username: data.username ?? d.id,
-              password: data.password ?? "",
-              role:     data.role     ?? "surveyor",
+              uid:      (data.uid as string | undefined) ?? undefined,
+              name:     (data.name     as string | undefined) ?? d.id,
+              username: (data.username as string | undefined) ?? d.id,
+              password: (data.password as string | undefined) ?? "",
+              role:     (data.role     as Account["role"] | undefined) ?? "surveyor",
             } as Account;
           }),
         );
@@ -351,17 +352,24 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
   const onboardUser = useCallback(async (account: {
     username: string; password: string; role: string; name?: string;
   }) => {
-    const username = account.username.trim().toLowerCase();
-    await setDoc(doc(db(), "users", username), cleanObj({
-      username,
-      password: account.password,
-      role:     account.role,
-      name:     account.name ?? username,
-    }));
+    try {
+      await onboardUserWithAuth({
+        username: account.username,
+        password: account.password,
+        role:     account.role,
+        name:     account.name,
+      });
+    } catch (authErr: unknown) {
+      const code = (authErr as { code?: string })?.code ?? "";
+      if (code === "auth/email-already-in-use") {
+        throw new Error("A user with that username already exists.");
+      }
+      throw authErr;
+    }
   }, []);
 
-  const removeUser = useCallback(async (username: string) => {
-    await deleteDoc(doc(db(), "users", username.trim().toLowerCase()));
+  const removeUser = useCallback(async (docId: string) => {
+    await deleteDoc(doc(db(), "users", docId.trim()));
   }, []);
 
   // ---- Dispatch — routes local actions to useReducer, data actions to Firestore ----
