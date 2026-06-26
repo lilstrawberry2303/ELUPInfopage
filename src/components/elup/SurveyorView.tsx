@@ -97,31 +97,31 @@ export function SurveyorView() {
               <Input placeholder="Search by unit # or floor…" value={search} onChange={(e) => setSearch(e.target.value)} />
 
               {/* My appointments today */}
-              <div className="rounded-lg border bg-sky-50/40 p-3">
+              <div className="rounded-lg border bg-sky-50/40 dark:bg-sky-950/20 p-3">
                 <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-sky-700">
                   <CalendarClock className="h-4 w-4" />
                   My Appointments Today
-                  <Badge variant="outline" className="ml-auto border-sky-400 bg-white text-sky-700 text-xs">
+                  <Badge variant="outline" className="ml-auto border-sky-400 bg-background dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 text-xs">
                     {today}
                   </Badge>
                 </div>
                 {todaysAppts.length === 0 && upcomingAppts.length === 0 && (
-                  <div className="rounded-md border border-dashed bg-white/60 p-3 text-center text-sm text-muted-foreground">
+                  <div className="rounded-md border border-dashed bg-background/60 dark:bg-muted/20 p-3 text-center text-sm text-muted-foreground">
                     No appointments scheduled for today.
                   </div>
                 )}
                 {(todaysAppts.length > 0 ? todaysAppts : upcomingAppts).map(([key, u]) => (
                   <div
                     key={key}
-                    className="mt-1 rounded-md border bg-white px-2.5 py-2 text-sm"
+                    className="mt-1 rounded-md border bg-card px-2.5 py-2 text-sm"
                   >
                     {/* Top row: time badge + unit number */}
                     <div className="flex items-start justify-between gap-1.5">
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-bold leading-snug sm:text-sm">{block.name} #{u.floor}-{u.unitNo}</div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">Lobby {u.lobby}{u.csAssignee ? ` · ${u.csAssignee}` : ""}</div>
+                        <div className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">Lobby {u.lobby}{u.csAssignee ? ` · ${u.csAssignee}` : ""}</div>
                       </div>
-                      <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 sm:text-xs">
+                      <span className="shrink-0 rounded bg-sky-100 dark:bg-sky-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 sm:text-xs">
                         {u.csTime ?? "—"}
                       </span>
                     </div>

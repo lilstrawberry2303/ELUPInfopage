@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Calendar, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, MapPin, Wrench } from "lucide-react";
+import { Calendar, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, MapPin, Wrench, X } from "lucide-react";
 import { PhotoUploader } from "./PhotoUploader";
 import { syncUnit, logActivity } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -44,7 +44,7 @@ function ApptRow({
   return (
     <button
       onClick={onClick}
-      className={`mt-1 w-full rounded-md border bg-white px-2.5 py-2 text-sm text-left transition ${
+      className={`mt-1 w-full rounded-md border bg-card px-2.5 py-2 text-sm text-left transition ${
         active ? "border-orange-500 ring-1 ring-orange-200" : "hover:bg-muted"
       }`}
     >
@@ -166,7 +166,7 @@ export function TechnicianView() {
           <CardTitle className="flex items-center gap-2 text-sm">
             <CalendarClock className="h-3.5 w-3.5 text-orange-500" />
             My CW Appointments Today
-            <Badge variant="outline" className="ml-auto border-orange-400 bg-white text-orange-700 text-xs">
+            <Badge variant="outline" className="ml-auto border-orange-400 bg-background dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 text-xs">
               {today}
             </Badge>
           </CardTitle>
@@ -197,6 +197,7 @@ export function TechnicianView() {
             blockId={active.blockId}
             unitKey={active.unitKey}
             techName={techName}
+            onDismiss={() => setActive(null)}
             onComplete={(patch) => {
               dispatch({
                 type: "UPDATE_UNIT",
@@ -336,13 +337,14 @@ export function TechnicianView() {
 }
 
 function WorkLogger({
-  blockId, unitKey, techName, emergency, onComplete,
+  blockId, unitKey, techName, emergency, onComplete, onDismiss,
 }: {
   blockId: string;
   unitKey: string;
   techName: string;
   emergency?: boolean;
   onComplete: (patch: any) => void;
+  onDismiss?: () => void;
 }) {
   const { state } = useElup();
   const block = state.blocks.find((b) => b.id === blockId);
@@ -357,9 +359,21 @@ function WorkLogger({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
           <span>{block.name} #{u.floor}-{u.unitNo}</span>
-          <Badge className={emergency ? "bg-amber-500 hover:bg-amber-500" : "bg-orange-500 hover:bg-orange-500"}>
-            {emergency ? "Unscheduled CW" : "Logging"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={emergency ? "bg-amber-500 hover:bg-amber-500" : "bg-orange-500 hover:bg-orange-500"}>
+              {emergency ? "Unscheduled CW" : "Logging"}
+            </Badge>
+            {onDismiss && (
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Collapse"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
