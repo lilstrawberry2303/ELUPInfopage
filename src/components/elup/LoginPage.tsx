@@ -6,7 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Zap, Loader2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
-import { loadLogoUrl, loginWithUsername } from "@/lib/firebase";
+import {
+  loadLogoUrl,
+  loginWithUsername,
+  activateTempPasswordIfPending,
+  findPendingPasswordReset,
+} from "@/lib/firebase";
 
 export function LoginPage() {
   const { state, dispatch } = useApp();
@@ -29,28 +34,71 @@ export function LoginPage() {
     }
     setLoading(true);
     try {
-      const fbCred = await loginWithUsername(u, password);
-      const uid = fbCred.user.uid;
-      const profile =
-        state.credentials.find((c) => c.uid === uid) ??
-        state.credentials.find((c) => c.username.toLowerCase() === u);
-      if (profile) {
-        dispatch({
-          type: "LOGIN",
-          user: {
-            org: profile.org,
-            uid,
-            username: profile.username,
-            displayName: profile.displayName,
-            role: profile.role,
-          },
-        });
-        toast.success(`Welcome, ${profile.displayName}`);
-      } else {
-        setError("Account profile not found. Please contact your manager.");
+      let fbUser: { uid: string; firebaseUser: import("firebase/auth").User } | null = null;
+
+      try {
+        const fbCred = await loginWithUsername(u, password);
+        fbUser = { uid: fbCred.user.uid, firebaseUser: fbCred.user };
+      } catch {
+        fbUser = null;
       }
-    } catch {
-      setError("Invalid username or password.");
+
+      if (fbUser) {
+        const { uid, firebaseUser } = fbUser;
+
+        // ── Activate any manager-set temporary password ──────────────────────
+        // If a manager wrote a tempPassword to Firestore, apply it to Firebase
+        // Auth now while the user is authenticated, then clean up the field.
+        try {
+          const activated = await activateTempPasswordIfPending(firebaseUser, uid);
+          if (activated) {
+            toast.info(
+              "Your manager set a new password for your account. It is now active — use it from your next sign-in.",
+              { duration: 8000 },
+            );
+          }
+        } catch {
+          // Non-critical — don't block login if the activation step fails
+        }
+
+        const profile =
+          state.credentials.find((c) => c.uid === uid) ??
+          state.credentials.find((c) => c.username.toLowerCase() === u);
+
+        if (profile) {
+          dispatch({
+            type: "LOGIN",
+            user: {
+              org: profile.org,
+              uid,
+              username: profile.username,
+              displayName: profile.displayName,
+              role: profile.role,
+            },
+          });
+          toast.success(`Welcome, ${profile.displayName}`);
+        } else {
+          setError("Account profile not found. Please contact your manager.");
+        }
+      } else {
+        // ── Firebase Auth failed — check for a pending manager password reset ─
+        // This happens when the employee tries the manager-set password before
+        // signing in once with their previous Auth password to activate it.
+        try {
+          const pendingReset = await findPendingPasswordReset(u, password);
+          if (pendingReset) {
+            setError(
+              "A password reset is pending for your account. " +
+              "Sign in once with your previous password to activate the new one. " +
+              "If you don't remember your previous password, ask your manager to update it directly in the Firebase Console.",
+            );
+            return;
+          }
+        } catch {
+          // Ignore query errors — fall through to generic error
+        }
+        setError("Invalid username or password.");
+      }
     } finally {
       setLoading(false);
     }

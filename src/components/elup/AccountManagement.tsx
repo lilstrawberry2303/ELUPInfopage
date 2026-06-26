@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useElup } from "@/lib/elup/store";
-import { updateUsernameInFirestore } from "@/lib/firebase";
+import { updateUsernameInFirestore, setTempPassword } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -171,14 +171,17 @@ function EditAccountDialog({ account }: { account: Account }) {
   const [name, setName] = useState(account.name);
   const [username, setUsername] = useState(account.username);
   const [role, setRole] = useState<Account["role"]>(account.role);
+  const [newPassword, setNewPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const reset = () => {
     setName(account.name);
     setUsername(account.username);
     setRole(account.role);
+    setNewPassword("");
+    setShowPw(false);
   };
-
-  const [saving, setSaving] = useState(false);
 
   const submit = async () => {
     const newUsername = username.trim().toLowerCase();
@@ -198,7 +201,23 @@ function EditAccountDialog({ account }: { account: Account }) {
       if (usernameChanged) {
         await updateUsernameInFirestore(account.id, newUsername);
       }
-      toast.success("Account updated");
+
+      // ── Password reset via tempPassword ──────────────────────────────────
+      // Writes the new password as a tempPassword field in Firestore.
+      // When the employee next signs in with their current Auth password, the
+      // app detects this field, updates their Firebase Auth password to the
+      // new value, and deletes the field automatically.
+      if (newPassword.trim()) {
+        await setTempPassword(account.id, newPassword.trim());
+        toast.success(
+          `Password reset queued for ${newName}. ` +
+          `They will be prompted to use the new password after their next sign-in with their current one.`,
+          { duration: 7000 },
+        );
+      } else {
+        toast.success("Account updated");
+      }
+
       setOpen(false);
     } catch (e: unknown) {
       toast.error("Failed to save", { description: String((e as Error)?.message ?? e) });
@@ -252,16 +271,39 @@ function EditAccountDialog({ account }: { account: Account }) {
               </p>
             )}
           </div>
-          <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-700">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>
-              To reset this user's password, go to{" "}
-              <strong>Firebase Console → Authentication → Users</strong>, find{" "}
-              <strong>{account.username}@elup.local</strong>, and use{" "}
-              <em>Reset password</em>. The user can also change their own password from their Settings page.
-            </span>
+
+          <div className="border-t pt-3">
+            <Label>
+              Reset password{" "}
+              <span className="font-normal text-muted-foreground">(leave blank to keep unchanged)</span>
+            </Label>
+            <div className="relative mt-1.5">
+              <Input
+                type={showPw ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="New password for this user"
+                className="pr-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((s) => !s)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="mt-2 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                The new password activates automatically the next time{" "}
+                <strong>{account.name}</strong> signs in with their current password.
+                Tell them their new password so they can use it after that sign-in.
+              </span>
+            </div>
           </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button className="bg-sky-600 hover:bg-sky-700" onClick={submit} disabled={saving}>

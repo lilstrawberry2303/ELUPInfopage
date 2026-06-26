@@ -1,12 +1,12 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, deleteField,
-  collection, serverTimestamp, getDocs, query, orderBy, writeBatch, arrayUnion, arrayRemove, type Firestore,
+  collection, serverTimestamp, getDocs, query, orderBy, where, writeBatch, arrayUnion, arrayRemove, type Firestore,
 } from "firebase/firestore";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   updatePassword as fbUpdatePassword, reauthenticateWithCredential, EmailAuthProvider,
-  signOut, type Auth, type UserCredential,
+  signOut, type Auth, type User, type UserCredential,
 } from "firebase/auth";
 import type { UnitActivityEntry } from "@/lib/elup/types";
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
@@ -212,6 +212,60 @@ export async function logActivity(
  */
 export async function removeUser(docId: string): Promise<void> {
   await deleteDoc(doc(db(), "users", docId.trim()));
+}
+
+/**
+ * Write a manager-set temporary password to a user's Firestore document.
+ * The employee must sign in once with their PREVIOUS Auth password to activate it,
+ * at which point the app calls activateTempPasswordIfPending() to update Firebase Auth.
+ *
+ * Path: /users/{docId}
+ */
+export async function setTempPassword(docId: string, newPassword: string): Promise<void> {
+  await updateDoc(doc(db(), "users", docId.trim()), { tempPassword: newPassword });
+}
+
+/**
+ * If the authenticated user has a pending tempPassword in their Firestore document,
+ * update their Firebase Auth password to that value and delete the field.
+ * Returns the activated password string, or null if none was pending.
+ *
+ * Must be called AFTER a successful signInWithEmailAndPassword so auth().currentUser is valid.
+ */
+export async function activateTempPasswordIfPending(
+  fbUser: User,
+  uid: string,
+): Promise<string | null> {
+  const userRef = doc(db(), "users", uid.trim());
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) return null;
+  const tempPassword = snap.data().tempPassword as string | undefined;
+  if (!tempPassword) return null;
+  await fbUpdatePassword(fbUser, tempPassword);
+  await updateDoc(userRef, { tempPassword: deleteField() });
+  return tempPassword;
+}
+
+/**
+ * Query the users collection for a document whose `username` matches and whose
+ * `tempPassword` field matches the typed password.
+ * Returns the matching document ID (uid) if found, null otherwise.
+ * Used when Firebase Auth login fails to detect a pending manager password reset.
+ */
+export async function findPendingPasswordReset(
+  username: string,
+  typedPassword: string,
+): Promise<string | null> {
+  const snap = await getDocs(
+    query(collection(db(), "users"), where("username", "==", username.trim().toLowerCase())),
+  );
+  for (const d of snap.docs) {
+    const data = d.data();
+    if (data.tempPassword && data.tempPassword === typedPassword) {
+      return d.id;
+    }
+  }
+  return null;
 }
 
 /** Upload a base64 PNG data URL to Firebase Storage. Returns the download URL. */
