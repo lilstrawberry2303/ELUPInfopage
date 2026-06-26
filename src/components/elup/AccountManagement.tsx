@@ -17,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { UserPlus, Pencil, Trash2, Users, Eye, EyeOff, Info, KeyRound, AlertTriangle, Loader2 } from "lucide-react";
+import { UserPlus, Pencil, Trash2, Users, Eye, EyeOff, Info, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Account } from "@/lib/elup/types";
 
@@ -298,17 +298,14 @@ function EditAccountDialog({ account }: { account: Account }) {
 function ForceResetDialog({ account }: { account: Account }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "confirm">("form");
-  const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
 
   const reset = () => {
-    setStep("form"); setCurrentPw(""); setNewPw("");
-    setShowCurrent(false); setShowNew(false);
-    setBusy(false); setProgress("");
+    setStep("form"); setNewPw("");
+    setShowNew(false); setBusy(false); setProgress("");
   };
 
   const handleConfirm = async () => {
@@ -316,17 +313,14 @@ function ForceResetDialog({ account }: { account: Account }) {
     setBusy(true);
     try {
       setProgress("Signing in as target user…");
-      // Small delay so the progress text renders before the async work starts
       await new Promise((r) => setTimeout(r, 50));
-
       setProgress("Deleting old Auth account…");
       const { newUid } = await forceResetPassword({
         oldUid:          account.uid,
         username:        account.username,
-        currentPassword: currentPw,
+        currentPassword: account.password,
         newPassword:     newPw,
       });
-
       toast.success(
         `Password for ${account.name} has been force-reset. New UID: ${newUid.slice(0, 8)}…`,
         { duration: 6000 },
@@ -365,36 +359,11 @@ function ForceResetDialog({ account }: { account: Account }) {
 
         {step === "form" ? (
           <>
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                This deletes and recreates <strong>@{account.username}</strong>'s Firebase Auth account.
-                Their app data is preserved. Use this only when they've completely forgotten their password
-                and the queued-reset (pencil icon) can't help.
-              </span>
-            </div>
-
             <div className="grid gap-3">
               <div>
-                <Label>Their current password</Label>
-                <p className="mb-1.5 text-[11px] text-muted-foreground">
-                  Required to authenticate as them before deleting their account.
-                </p>
-                <div className="relative">
-                  <Input
-                    type={showCurrent ? "text" : "password"}
-                    value={currentPw}
-                    onChange={(e) => setCurrentPw(e.target.value)}
-                    placeholder="Their existing password"
-                    className="pr-9"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCurrent((s) => !s)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                <Label>Current password</Label>
+                <div className="mt-1.5 flex items-center rounded-md border bg-muted/40 px-3 py-2 text-sm font-mono text-muted-foreground">
+                  {account.password || <span className="italic">not stored</span>}
                 </div>
               </div>
 
@@ -424,8 +393,8 @@ function ForceResetDialog({ account }: { account: Account }) {
               <Button
                 className="bg-amber-600 hover:bg-amber-700 text-white"
                 onClick={() => {
-                  if (!currentPw.trim() || !newPw.trim()) {
-                    toast.error("Both passwords are required");
+                  if (!newPw.trim()) {
+                    toast.error("New password is required");
                     return;
                   }
                   if (newPw.length < 6) {

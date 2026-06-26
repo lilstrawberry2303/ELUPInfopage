@@ -75,8 +75,9 @@ export async function onboardUserWithAuth(account: {
   await setDoc(doc(db(), "users", uid), clean({
     uid,
     username,
-    role: account.role,
-    name: account.name ?? username,
+    role:     account.role,
+    name:     account.name ?? username,
+    password: account.password,
   }));
   return { uid };
 }
