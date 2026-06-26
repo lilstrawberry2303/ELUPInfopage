@@ -6,7 +6,7 @@ import {
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   updatePassword as fbUpdatePassword, reauthenticateWithCredential, EmailAuthProvider,
-  signOut, type Auth, type User, type UserCredential,
+  deleteUser, signOut, type Auth, type User, type UserCredential,
 } from "firebase/auth";
 import type { UnitActivityEntry } from "@/lib/elup/types";
 import { getStorage, ref, uploadBytes, getDownloadURL, type FirebaseStorage } from "firebase/storage";
@@ -266,6 +266,90 @@ export async function findPendingPasswordReset(
     }
   }
   return null;
+}
+
+/**
+ * Force-reset a staff member's Firebase Auth password using a delete-and-recreate
+ * strategy, without affecting the currently signed-in manager's session.
+ *
+ * Strategy:
+ *  1. A secondary Firebase app signs in as the target user (requires their current password).
+ *  2. That secondary session deletes the target's Auth account.
+ *  3. A third Firebase app instance creates a brand-new Auth account with the same
+ *     virtual email and the new password — manager's primary session is untouched.
+ *  4. Firestore: read old /users/{oldUid}, write to /users/{newUid}, delete old doc.
+ *
+ * Throws with a descriptive message on any step failure.
+ * Both secondary app instances are always cleaned up in a finally block.
+ */
+export async function forceResetPassword(params: {
+  oldUid: string;
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ newUid: string }> {
+  const { oldUid, username, currentPassword, newPassword } = params;
+  const email = toVirtualEmail(username);
+  const tag = Date.now();
+
+  const signInApp  = initializeApp(firebaseConfig, `fr-signin-${tag}`);
+  const createApp  = initializeApp(firebaseConfig, `fr-create-${tag}`);
+  const signInAuth = getAuth(signInApp);
+  const createAuth = getAuth(createApp);
+
+  try {
+    // ── Step 1: Authenticate as the target user on a secondary instance ──────
+    let targetCred: UserCredential;
+    try {
+      targetCred = await signInWithEmailAndPassword(signInAuth, email, currentPassword);
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code ?? "";
+      if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
+        throw new Error("Current password is incorrect. The reset was not performed.");
+      }
+      throw e;
+    }
+
+    // ── Step 2: Read old Firestore profile before deleting anything ──────────
+    const oldRef  = doc(db(), "users", oldUid);
+    const oldSnap = await getDoc(oldRef);
+    const oldData = oldSnap.exists() ? oldSnap.data() : {};
+
+    // ── Step 3: Delete the target's Auth account via the secondary session ───
+    await deleteUser(targetCred.user);
+
+    // ── Step 4: Re-create the Auth account with the new password ─────────────
+    // Using a third app instance so the manager's primary session is unaffected.
+    let newUid: string;
+    try {
+      const newCred = await createUserWithEmailAndPassword(createAuth, email, newPassword);
+      newUid = newCred.user.uid;
+    } catch (createErr: unknown) {
+      // Auth account was deleted but creation failed — surface a recovery message.
+      throw new Error(
+        "The old account was removed but the new one could not be created. " +
+        "Please add the user manually in Firebase Console → Authentication " +
+        `with email ${email} and the new password.`,
+      );
+    }
+
+    // ── Step 5: Migrate Firestore profile ─────────────────────────────────────
+    // Strip tempPassword (and uid) from old data before writing to new path.
+    const { tempPassword: _tp, uid: _oldUid, ...rest } = oldData as Record<string, unknown>;
+    const newRef = doc(db(), "users", newUid);
+    await setDoc(newRef, {
+      ...clean(rest),
+      uid:       newUid,
+      updatedAt: serverTimestamp(),
+    });
+    await deleteDoc(oldRef);
+
+    return { newUid };
+  } finally {
+    // Always clean up secondary app instances
+    try { await signInApp.delete(); }  catch { /* ignore */ }
+    try { await createApp.delete(); }  catch { /* ignore */ }
+  }
 }
 
 /** Upload a base64 PNG data URL to Firebase Storage. Returns the download URL. */
