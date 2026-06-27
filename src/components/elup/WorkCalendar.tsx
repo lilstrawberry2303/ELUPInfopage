@@ -49,7 +49,10 @@ export function WorkCalendar() {
 
   // All appointments grouped by day (DD/MM/YY)
   const apptsByDay = useMemo(() => {
-    const m = new Map<string, { cs: { label: string; time: string }[]; cw: { label: string; time: string }[] }>();
+    const m = new Map<string, {
+      cs: { label: string; time: string }[];
+      cw: { label: string; time: string; assignee?: string }[];
+    }>();
     state.blocks.forEach((b) => {
       Object.values(b.units).forEach((u) => {
         if (!u.exists) return;
@@ -59,7 +62,11 @@ export function WorkCalendar() {
         }
         if (u.cwDate && (u.cwStatus === "scheduled" || u.cwStatus === "in_progress" || u.cwStatus === "completed")) {
           if (!m.has(u.cwDate)) m.set(u.cwDate, { cs: [], cw: [] });
-          m.get(u.cwDate)!.cw.push({ label: `${b.name} #${u.floor}-${u.unitNo}`, time: u.cwTime ?? "" });
+          m.get(u.cwDate)!.cw.push({
+            label:    `${b.name} #${u.floor}-${u.unitNo}`,
+            time:     u.cwTime ?? "",
+            assignee: u.cwAssignee,
+          });
         }
       });
     });
@@ -274,7 +281,7 @@ export function WorkCalendar() {
                       className={`flex min-h-[28px] gap-2 border-b px-2 py-1 last:border-0 ${hasContent ? "bg-muted/20" : ""}`}
                     >
                       <span className="w-12 shrink-0 font-mono text-[10px] leading-5 text-muted-foreground">
-                        {slot.label.split("-")[0]}
+                        {slot.label}
                       </span>
                       <div className="flex-1 space-y-0.5">
                         {csHere.map((a, idx) => (
@@ -287,6 +294,9 @@ export function WorkCalendar() {
                           <div key={idx} className="flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] text-orange-800">
                             <Zap className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">{a.label}</span>
+                            {a.assignee && (
+                              <span className="ml-0.5 shrink-0 opacity-70">· {a.assignee}</span>
+                            )}
                           </div>
                         ))}
                       </div>

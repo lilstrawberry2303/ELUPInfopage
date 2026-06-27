@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { TIME_SLOTS } from "@/lib/elup/slots";
+import { TIME_SLOTS, CW_TIME_SLOTS, HOUR_OPTIONS } from "@/lib/elup/slots";
 import { uploadSignatureFile } from "@/lib/firebase";
 import { PhotoUploader } from "./PhotoUploader";
 import { DocumentUploader } from "./DocumentUploader";
@@ -969,7 +969,7 @@ function EditSurveyDialog({
                 <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">—</SelectItem>
-                  {TIME_SLOTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {CW_TIME_SLOTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1027,20 +1027,33 @@ function ScheduleQuickDialog({
 }) {
   const { state: elupState } = useElup();
   const [open, setOpen] = useState(false);
-  const existingDate = isCS ? unit.csDate : unit.cwDate;
-  const existingTime = isCS ? unit.csTime : unit.cwTime;
+  const existingDate     = isCS ? unit.csDate     : unit.cwDate;
+  const existingTime     = isCS ? unit.csTime     : unit.cwTime;
   const existingAssignee = isCS ? unit.csAssignee : unit.cwAssignee;
-  const [date, setDate] = useState(dmyToIso(existingDate));
-  const [time, setTime] = useState(existingTime ?? "10:00");
+
+  const [date, setDate]       = useState(dmyToIso(existingDate));
+  const [time, setTime]       = useState(existingTime ?? "09:00-10:00");
+  // CW: separate start/end hour pickers
+  const [cwStart, setCwStart] = useState(() =>
+    (existingTime?.includes("-") ? existingTime.split("-")[0] : null) ?? "08:00",
+  );
+  const [cwEnd, setCwEnd]     = useState(() =>
+    (existingTime?.includes("-") ? existingTime.split("-")[1] : null) ?? "10:00",
+  );
   const [assignee, setAssignee] = useState(existingAssignee ?? "");
   const roleAccounts = elupState.accounts.filter((a) => a.role === (isCS ? "surveyor" : "technician"));
 
+  // Valid end options: any hour strictly after the chosen start
+  const endOptions = HOUR_OPTIONS.filter((h) => h > cwStart);
+
   const submit = () => {
     if (!date) { toast.error("Date required"); return; }
-    const dateStr = fmtDmy(date);
+    if (!isCS && cwEnd <= cwStart) { toast.error("End time must be after start time"); return; }
+    const dateStr      = fmtDmy(date);
+    const resolvedTime = isCS ? time : `${cwStart}-${cwEnd}`;
     const patch: Partial<UnitData> = isCS
-      ? { csStatus: "scheduled", csDate: dateStr, csTime: time, csAssignee: assignee }
-      : { cwStatus: "scheduled", cwDate: dateStr, cwTime: time, cwAssignee: assignee };
+      ? { csStatus: "scheduled", csDate: dateStr, csTime: resolvedTime, csAssignee: assignee }
+      : { cwStatus: "scheduled", cwDate: dateStr, cwTime: resolvedTime, cwAssignee: assignee };
     onSave(patch);
     setOpen(false);
   };
@@ -1058,15 +1071,49 @@ function ScheduleQuickDialog({
           <DialogTitle>{existingDate ? `Reschedule ${isCS ? "CS" : "CW"}` : `Schedule ${isCS ? "CS" : "CW"}`}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-            <div>
-              <Label>Time</Label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={time} onChange={(e) => setTime(e.target.value)}>
-                {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+          {isCS ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+              <div>
+                <Label>Time</Label>
+                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={time} onChange={(e) => setTime(e.target.value)}>
+                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>Date</Label>
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Start</Label>
+                <Select value={cwStart} onValueChange={(v) => {
+                  setCwStart(v);
+                  if (cwEnd <= v) setCwEnd(HOUR_OPTIONS.find((h) => h > v) ?? "18:00");
+                }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HOUR_OPTIONS.filter((h) => h < "18:00").map((h) => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>End</Label>
+                <Select value={cwEnd} onValueChange={setCwEnd}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {endOptions.map((h) => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
           <div>
             <Label>{isCS ? "Surveyor" : "Technician"}</Label>
             <Select value={assignee} onValueChange={setAssignee}>
