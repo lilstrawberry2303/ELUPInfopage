@@ -479,6 +479,21 @@ export async function deleteUserCompletely(params: {
   }
 }
 
+/** Upload a signature image/PDF file to Firebase Storage. Returns the download URL. */
+export async function uploadSignatureFile(file: File, storagePath: string): Promise<string> {
+  const allowed = [
+    "image/png", "image/jpeg", "image/jpg", "image/gif",
+    "image/webp", "image/bmp", "application/pdf",
+  ];
+  if (!allowed.includes(file.type)) {
+    throw new Error("Only image files (PNG, JPG, GIF, WebP) or PDF are allowed for signatures");
+  }
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
+  const objectRef = ref(storage(), `${storagePath}/sig-${Date.now()}.${ext}`);
+  await uploadBytes(objectRef, file, { contentType: file.type });
+  return await getDownloadURL(objectRef);
+}
+
 /** Upload a base64 PNG data URL to Firebase Storage. Returns the download URL. */
 export async function uploadSignatureToStorage(dataUrl: string, storagePath: string): Promise<string> {
   const res = await fetch(dataUrl);

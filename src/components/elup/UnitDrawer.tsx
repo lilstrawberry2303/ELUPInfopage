@@ -19,13 +19,14 @@ import { useElup, useActiveBlock } from "@/lib/elup/store";
 import {
   CalendarDays, Camera, Download, FileSignature, BellRing, CalendarPlus, Trash2,
   Phone, User, Wrench, Zap, ImageOff, Flag, Pencil, ChevronLeft, ChevronRight,
-  X, Upload, CheckCircle2, FileText, History,
+  X, Upload, CheckCircle2, FileText, History, Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { TIME_SLOTS } from "@/lib/elup/slots";
+import { uploadSignatureFile } from "@/lib/firebase";
 import { PhotoUploader } from "./PhotoUploader";
 import { DocumentUploader } from "./DocumentUploader";
 import type {
@@ -195,6 +196,38 @@ export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
   const closeLightbox = () => setLightbox(null);
   const prevPhoto = () => setLightbox((l) => l ? { ...l, idx: Math.max(0, l.idx - 1) } : l);
   const nextPhoto = () => setLightbox((l) => l ? { ...l, idx: Math.min(l.urls.length - 1, l.idx + 1) } : l);
+
+  const sigFileRef = useRef<HTMLInputElement>(null);
+  const [sigUploading, setSigUploading] = useState(false);
+
+  const handleSigUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !u || !unitKey) return;
+    e.target.value = "";
+    setSigUploading(true);
+    try {
+      const url = await uploadSignatureFile(
+        file,
+        `signatures/${block.precinct}/${block.id}/${unitKey}`,
+      );
+      dispatch({
+        type: "UPDATE_UNIT",
+        blockId: block.id,
+        unitKey,
+        patch: {
+          survey: {
+            ...(u.survey ?? { existingLoadAmps: 0, condition: "good" as const, notes: "", photos: [] }),
+            residentSignature: url,
+          },
+        },
+      });
+      toast.success("Resident signature uploaded");
+    } catch (err: unknown) {
+      toast.error("Upload failed", { description: String((err as Error)?.message ?? err) });
+    } finally {
+      setSigUploading(false);
+    }
+  }, [block, dispatch, u, unitKey]);
 
   function generatePdf() {
     if (!u || !unitKey) return;
@@ -401,14 +434,42 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                           })}
                           {u.survey.scheduledCableWorkDate && <Row k="CW Scheduled" v={`${u.survey.scheduledCableWorkDate}${u.survey.scheduledCableWorkTime ? ` · ${u.survey.scheduledCableWorkTime}` : ""}`} />}
                           {u.survey.notes && <p className="rounded-md bg-muted/50 p-2 text-xs">{u.survey.notes}</p>}
-                          {u.survey.residentSignature && (
-                            <button
-                              className="flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
-                              onClick={() => setLightbox({ urls: [u.survey!.residentSignature!], idx: 0, bgWhite: true })}
-                            >
-                              <CheckCircle2 className="h-3 w-3" /> Resident signed · view signature
-                            </button>
-                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {u.survey.residentSignature && (
+                              <button
+                                className="flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+                                onClick={() => setLightbox({ urls: [u.survey!.residentSignature!], idx: 0, bgWhite: true })}
+                              >
+                                <CheckCircle2 className="h-3 w-3" /> Resident signed · view signature
+                              </button>
+                            )}
+                            {isManager && (
+                              <>
+                                <input
+                                  ref={sigFileRef}
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,application/pdf"
+                                  className="hidden"
+                                  onChange={handleSigUpload}
+                                />
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 gap-1 px-2 text-[11px]"
+                                  disabled={sigUploading}
+                                  onClick={() => sigFileRef.current?.click()}
+                                >
+                                  {sigUploading ? (
+                                    <><Loader2 className="h-3 w-3 animate-spin" /> Uploading…</>
+                                  ) : u.survey.residentSignature ? (
+                                    <><Upload className="h-3 w-3" /> Replace</>
+                                  ) : (
+                                    <><Upload className="h-3 w-3" /> Upload Signature</>
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <Empty text="Survey not completed" />
