@@ -10,18 +10,14 @@ import { useApp } from "@/lib/app-context";
 import { toast } from "sonner";
 import {
   auth, uploadLogo, saveLogoUrl,
-  reauthenticate, updateOwnPassword, updateUsernameInFirestore,
+  reauthenticate, updateOwnPassword,
 } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 export function SettingsDialog() {
   const { state, dispatch } = useApp();
   const fileRef = useRef<HTMLInputElement>(null);
   const [logoUploading, setLogoUploading] = useState(false);
 
-  // Account change state
-  const [newUsername, setNewUsername] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -37,136 +33,61 @@ export function SettingsDialog() {
       await saveLogoUrl(url);
       dispatch({ type: "SET_LOGO", url });
       toast.success("Logo uploaded");
-    } catch (err: any) {
-      toast.error("Logo upload failed", { description: String(err?.message ?? err) });
+    } catch (err: unknown) {
+      toast.error("Logo upload failed", { description: String((err as Error)?.message ?? err) });
     } finally {
       setLogoUploading(false);
     }
   };
 
-  const saveCredentials = async () => {
-    const user = state.user!;
+  const savePassword = async () => {
     if (!currentPassword) {
-      toast.error("Current password is required to save changes.");
+      toast.error("Current password is required.");
       return;
     }
-    if (newPassword && newPassword !== confirmPassword) {
+    if (!newPassword) {
+      toast.error("New password is required.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
       toast.error("New passwords do not match.");
       return;
     }
-    if (newPassword && newPassword.length < 6) {
+    if (newPassword.length < 6) {
       toast.error("New password must be at least 6 characters.");
-      return;
-    }
-
-    const targetUsername = newUsername.trim().toLowerCase() || user.username.toLowerCase();
-    const usernameChanged = targetUsername !== user.username.toLowerCase();
-
-    // Check username conflict
-    if (usernameChanged && state.credentials.some(
-      (c) => c.username.toLowerCase() === targetUsername && c.org === user.org,
-    )) {
-      toast.error("That username is already taken.");
       return;
     }
 
     setSaving(true);
     try {
       const firebaseUser = auth().currentUser;
-
-      // Step 1 — verify current password
       if (firebaseUser) {
-        // Firebase Auth account: reauthenticate properly
         try {
           await reauthenticate(currentPassword);
         } catch {
           toast.error("Current password is incorrect.");
           return;
         }
-      } else {
-        // Legacy account: compare against Firestore credential
-        const existing = state.credentials.find(
-          (c) => c.org === user.org && c.username.toLowerCase() === user.username.toLowerCase(),
-        );
-        if (!existing || existing.password !== currentPassword) {
-          toast.error("Current password is incorrect.");
-          return;
-        }
-      }
-
-      // Step 2 — update username in Firestore (if changed)
-      if (usernameChanged) {
-        const docId = user.uid ?? user.username.toLowerCase();
-        if (firebaseUser) {
-          await updateUsernameInFirestore(docId, targetUsername);
-        } else {
-          // Legacy: create new doc, remove old
-          const existing = state.credentials.find(
-            (c) => c.org === user.org && c.username.toLowerCase() === user.username.toLowerCase(),
-          )!;
-          await setDoc(doc(db(), "users", targetUsername), {
-            username: targetUsername,
-            password: newPassword || existing.password,
-            role: existing.role,
-            name: existing.displayName,
-          });
-          const { deleteDoc } = await import("firebase/firestore");
-          await deleteDoc(doc(db(), "users", user.username.toLowerCase()));
-        }
-        dispatch({
-          type: "UPDATE_CREDENTIAL",
-          org: user.org,
-          oldUsername: user.username,
-          newUsername: targetUsername,
-          newPassword: newPassword || currentPassword,
-        });
-      }
-
-      // Step 3 — update password
-      if (newPassword) {
-        if (firebaseUser) {
-          try {
-            await updateOwnPassword(newPassword);
-          } catch (e: any) {
-            if ((e?.code as string) === "auth/requires-recent-login") {
-              toast.error(
-                "Your session has expired for security reasons. Please sign out and sign back in, then try changing your password again.",
-                { duration: 8000 },
-              );
-              return;
-            }
-            throw e;
+        try {
+          await updateOwnPassword(newPassword);
+        } catch (e: unknown) {
+          if ((e as { code?: string })?.code === "auth/requires-recent-login") {
+            toast.error(
+              "Session expired — please sign out and back in, then try again.",
+              { duration: 8000 },
+            );
+            return;
           }
-        } else {
-          // Legacy: update password field in Firestore
-          const existing = state.credentials.find(
-            (c) => c.org === user.org && c.username.toLowerCase() === (usernameChanged ? targetUsername : user.username.toLowerCase()),
-          );
-          if (existing) {
-            await setDoc(doc(db(), "users", usernameChanged ? targetUsername : user.username.toLowerCase()), {
-              username: usernameChanged ? targetUsername : user.username.toLowerCase(),
-              password: newPassword,
-              role: existing.role,
-              name: existing.displayName,
-            });
-          }
-          dispatch({
-            type: "UPDATE_CREDENTIAL",
-            org: user.org,
-            oldUsername: usernameChanged ? targetUsername : user.username,
-            newUsername: usernameChanged ? targetUsername : user.username,
-            newPassword,
-          });
+          throw e;
         }
       }
 
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setNewUsername("");
-      toast.success("Account details updated.");
-    } catch (e: any) {
-      toast.error("Failed to save changes", { description: String(e?.message ?? e) });
+      toast.success("Password updated.");
+    } catch (e: unknown) {
+      toast.error("Failed to save changes", { description: String((e as Error)?.message ?? e) });
     } finally {
       setSaving(false);
     }
@@ -215,7 +136,7 @@ export function SettingsDialog() {
                 />
                 <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={logoUploading}>
                   {logoUploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}
-                  {logoUploading ? "Uploading\u2026" : "Upload Logo"}
+                  {logoUploading ? "Uploading…" : "Upload Logo"}
                 </Button>
                 {state.settings.logoUrl && (
                   <Button
@@ -226,8 +147,8 @@ export function SettingsDialog() {
                       try {
                         await saveLogoUrl(null);
                         dispatch({ type: "SET_LOGO", url: null });
-                      } catch (err: any) {
-                        toast.error("Failed to remove logo", { description: String(err?.message ?? err) });
+                      } catch (err: unknown) {
+                        toast.error("Failed to remove logo", { description: String((err as Error)?.message ?? err) });
                       }
                     }}
                   >
@@ -260,29 +181,18 @@ export function SettingsDialog() {
             </Button>
           </div>
 
-          {/* Account */}
+          {/* Change Password */}
           <div className="space-y-3 rounded-lg border p-4">
             <div className="flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-semibold">Change Account Details</Label>
+              <Label className="text-sm font-semibold">Change Password</Label>
             </div>
             <p className="text-xs text-muted-foreground">
               Signed in as <span className="font-medium text-foreground">{state.user?.username}</span>.
-              Fill in only the fields you want to change.
             </p>
             <div className="space-y-2.5">
               <div className="space-y-1">
-                <Label className="text-xs">New username</Label>
-                <Input
-                  placeholder={state.user?.username ?? ""}
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
-                  autoComplete="username"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Current password <span className="text-destructive">*</span></Label>
+                <Label className="text-xs">Current password</Label>
                 <Input
                   type="password"
                   placeholder="Required to save changes"
@@ -296,7 +206,7 @@ export function SettingsDialog() {
                 <Label className="text-xs">New password</Label>
                 <Input
                   type="password"
-                  placeholder="Leave blank to keep current"
+                  placeholder="At least 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   autoComplete="new-password"
@@ -319,13 +229,13 @@ export function SettingsDialog() {
               <Button
                 size="sm"
                 className="w-full gap-1.5"
-                disabled={!currentPassword || saving}
-                onClick={saveCredentials}
+                disabled={!currentPassword || !newPassword || saving}
+                onClick={savePassword}
               >
                 {saving ? (
                   <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</>
                 ) : (
-                  <><Check className="h-3.5 w-3.5" /> Save Changes</>
+                  <><Check className="h-3.5 w-3.5" /> Save Password</>
                 )}
               </Button>
             </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useElup } from "@/lib/elup/store";
-import { updateUsernameInFirestore, forceResetPassword, deleteUserCompletely } from "@/lib/firebase";
+import { changeUsernameWithAuth, updateUsernameInFirestore, forceResetPassword, deleteUserCompletely } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,10 +184,27 @@ function EditAccountDialog({ account }: { account: Account }) {
     setSaving(true);
     try {
       const usernameChanged = newUsername !== account.username.trim().toLowerCase();
-      const patch: Record<string, unknown> = { name: newName, role };
-      if (usernameChanged) patch.username = newUsername;
-      dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch });
-      if (usernameChanged) await updateUsernameInFirestore(account.id, newUsername);
+
+      if (usernameChanged) {
+        if (account.uid && account.password) {
+          // Full Auth + Firestore migration via delete-and-recreate
+          await changeUsernameWithAuth({
+            oldUid:      account.uid,
+            oldUsername: account.username,
+            newUsername,
+            password:    account.password,
+          });
+          // Firestore real-time listener will update local state automatically
+        } else {
+          // Legacy account — simple Firestore field patch
+          dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch: { name: newName, role, username: newUsername } });
+          await updateUsernameInFirestore(account.id, newUsername);
+        }
+      } else {
+        // No username change — store dispatch handles both local state and Firestore write
+        dispatch({ type: "UPDATE_ACCOUNT", id: account.id, patch: { name: newName, role } });
+      }
+
       toast.success("Account updated");
       setOpen(false);
     } catch (e: unknown) {
