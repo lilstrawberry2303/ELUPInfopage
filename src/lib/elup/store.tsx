@@ -6,8 +6,9 @@ import {
   collection, collectionGroup, doc, setDoc, updateDoc, deleteDoc,
   addDoc, writeBatch, onSnapshot, serverTimestamp,
 } from "firebase/firestore";
-import { db, onboardUserWithAuth, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
-import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry } from "./types";
+import { db, onboardUserWithAuth, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, saveInfoPageContent, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
+import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry, InfoPageContent } from "./types";
+import { DEFAULT_INFO_PAGE } from "./types";
 
 function mkEntry(
   type: UnitActivityEntry["type"],
@@ -63,6 +64,7 @@ interface State {
   customSurveyFields: CustomSurveyField[];
   hiddenSurveyGroups: DefaultSurveyGroup[];
   blockedDates: BlockedDate[];
+  infoPageContent: InfoPageContent;
   loading: boolean;
 }
 
@@ -89,7 +91,8 @@ type Action =
   | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
   | { type: "REMOVE_BLOCKED_DATE"; id: string }
   | { type: "SEND_CS_REMINDER"; blockId: string; unitKey: string; date: string; notes?: string }
-  | { type: "REMOVE_CS_REMINDER"; blockId: string; unitKey: string; reminderType: "legacy1" | "legacy2" | "new"; date?: string };
+  | { type: "REMOVE_CS_REMINDER"; blockId: string; unitKey: string; reminderType: "legacy1" | "legacy2" | "new"; date?: string }
+  | { type: "SAVE_INFO_CONTENT"; content: InfoPageContent };
 
 // ---- Local-only UI state (never touches Firestore) ----
 interface LocalState {
@@ -99,6 +102,7 @@ interface LocalState {
   customSurveyFields: CustomSurveyField[];
   hiddenSurveyGroups: DefaultSurveyGroup[];
   blockedDates: BlockedDate[];
+  infoPageContent: InfoPageContent;
 }
 
 type LocalAction =
@@ -111,7 +115,8 @@ type LocalAction =
   | { type: "SET_SURVEY_CONFIG"; customSurveyFields: CustomSurveyField[]; hiddenSurveyGroups: DefaultSurveyGroup[] }
   | { type: "ADD_BLOCKED_DATE"; date: BlockedDate }
   | { type: "REMOVE_BLOCKED_DATE"; id: string }
-  | { type: "SET_BLOCKED_DATES"; dates: BlockedDate[] };
+  | { type: "SET_BLOCKED_DATES"; dates: BlockedDate[] }
+  | { type: "SET_INFO_CONTENT"; content: InfoPageContent };
 
 function localReducer(state: LocalState, action: LocalAction): LocalState {
   switch (action.type) {
@@ -136,6 +141,8 @@ function localReducer(state: LocalState, action: LocalAction): LocalState {
       return { ...state, blockedDates: state.blockedDates.filter((d) => d.id !== action.id) };
     case "SET_BLOCKED_DATES":
       return { ...state, blockedDates: action.dates };
+    case "SET_INFO_CONTENT":
+      return { ...state, infoPageContent: action.content };
   }
 }
 
@@ -161,6 +168,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
     customSurveyFields: [],
     hiddenSurveyGroups: [],
     blockedDates: [],
+    infoPageContent: DEFAULT_INFO_PAGE,
   });
 
   // ---- Firestore reactive state ----
@@ -250,6 +258,21 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       },
     );
 
+    const unsubInfoPage = onSnapshot(
+      doc(db(), "config", "infoPage"),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data() as InfoPageContent;
+          localDispatch({ type: "SET_INFO_CONTENT", content: {
+            paragraphs: Array.isArray(d.paragraphs) ? d.paragraphs : DEFAULT_INFO_PAGE.paragraphs,
+            diagrams:   Array.isArray(d.diagrams)   ? d.diagrams   : DEFAULT_INFO_PAGE.diagrams,
+            faqs:       Array.isArray(d.faqs)       ? d.faqs       : DEFAULT_INFO_PAGE.faqs,
+          }});
+        }
+      },
+      (err) => console.warn("[elup] infoPage listener:", err),
+    );
+
     const unsubBlockedDates = onSnapshot(
       doc(db(), "config", "blockedDates"),
       (snap) => {
@@ -325,7 +348,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       (err) => console.error("[elup] users listener:", err),
     );
 
-    return () => { unsubSurveyConfig(); unsubBlockedDates(); unsubBlocks(); unsubUnits(); unsubUsers(); };
+    return () => { unsubSurveyConfig(); unsubInfoPage(); unsubBlockedDates(); unsubBlocks(); unsubUnits(); unsubUsers(); };
   }, []);
 
   // ---- Utility functions (exposed in context value) ----
@@ -666,6 +689,12 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             break;
           }
 
+          case "SAVE_INFO_CONTENT": {
+            localDispatch({ type: "SET_INFO_CONTENT", content: action.content });
+            await saveInfoPageContent(action.content);
+            break;
+          }
+
           case "ADD_BLOCK": {
             const { block } = action;
             const precinctId = slugify(block.precinct) || `precinct-${Date.now()}`;
@@ -961,7 +990,8 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
       optOutRequests,
       customSurveyFields: local.customSurveyFields,
       hiddenSurveyGroups: local.hiddenSurveyGroups,
-      blockedDates: local.blockedDates,
+      blockedDates:       local.blockedDates,
+      infoPageContent:    local.infoPageContent,
       loading,
     }),
     [local, blocks, accounts, optOutRequests, loading],

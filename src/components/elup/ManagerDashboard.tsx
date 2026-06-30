@@ -18,9 +18,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useElup, useActiveBlock } from "@/lib/elup/store";
 import { usePrecincts } from "@/lib/elup/firestore";
+import { InfoPageCustomizer } from "./InfoPageCustomizer";
 import {
   Activity, Building, CalendarPlus, CheckCircle2, ClipboardList,
-  Plus, PieChart as PieIcon, Zap, Flag, Settings2, Pencil, Trash2, CalendarDays} from "lucide-react";
+  Plus, PieChart as PieIcon, Zap, Flag, Settings2, Pencil, Trash2, CalendarDays,
+} from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { toast } from "sonner";
 
@@ -430,118 +432,129 @@ function SurveyFormCustomizer() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline">
-          <Settings2 className="mr-2 h-4 w-4" /> Survey Form
+          <Settings2 className="mr-2 h-4 w-4" /> Customise CS
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Customize CS Survey Form</DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label className="text-sm font-semibold">Default Sections</Label>
-            <p className="mb-2 text-xs text-muted-foreground">Toggle off to hide from surveyor form.</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEFAULT_GROUPS.map((g) => {
-                const hidden = state.hiddenSurveyGroups.includes(g.id);
-                return (
-                  <Button
-                    key={g.id}
-                    variant={hidden ? "outline" : "default"}
-                    size="sm"
-                    onClick={() => dispatch({ type: "TOGGLE_SURVEY_GROUP", group: g.id })}
-                  >
-                    {hidden ? "Hidden" : "Shown"}: {g.label}
-                  </Button>
-                );
-              })}
+      <DialogContent className="max-w-xl max-h-[90vh] flex flex-col">
+        <DialogHeader><DialogTitle>Customise CS</DialogTitle></DialogHeader>
+        <Tabs defaultValue="survey" className="flex-1 min-h-0 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 shrink-0">
+            <TabsTrigger value="survey">Survey Form</TabsTrigger>
+            <TabsTrigger value="infopage">Information Page</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="survey" className="flex-1 overflow-y-auto mt-3 space-y-4">
+            <div>
+              <Label className="text-sm font-semibold">Default Sections</Label>
+              <p className="mb-2 text-xs text-muted-foreground">Toggle off to hide from surveyor form.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEFAULT_GROUPS.map((g) => {
+                  const hidden = state.hiddenSurveyGroups.includes(g.id);
+                  return (
+                    <Button
+                      key={g.id}
+                      variant={hidden ? "outline" : "default"}
+                      size="sm"
+                      onClick={() => dispatch({ type: "TOGGLE_SURVEY_GROUP", group: g.id })}
+                    >
+                      {hidden ? "Hidden" : "Shown"}: {g.label}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          <div>
-            <Label className="text-sm font-semibold">Custom Fields</Label>
-            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-              {state.customSurveyFields.length === 0 && (
-                <p className="text-xs text-muted-foreground">No custom fields yet.</p>
-              )}
-              {state.customSurveyFields.map((f) => (
-                <div key={f.id} className="flex items-start justify-between rounded border p-2 text-sm">
-                  <div>
-                    <span className="font-medium">{f.label}</span>{" "}
-                    <span className="text-xs text-muted-foreground">({f.type})</span>
-                    {f.options && f.options.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {f.options.map((o) => (
-                          <span key={o} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{o}</span>
+            <div>
+              <Label className="text-sm font-semibold">Custom Fields</Label>
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                {state.customSurveyFields.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No custom fields yet.</p>
+                )}
+                {state.customSurveyFields.map((f) => (
+                  <div key={f.id} className="flex items-start justify-between rounded border p-2 text-sm">
+                    <div>
+                      <span className="font-medium">{f.label}</span>{" "}
+                      <span className="text-xs text-muted-foreground">({f.type})</span>
+                      {f.options && f.options.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {f.options.map((o) => (
+                            <span key={o} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{o}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="shrink-0"
+                      onClick={() => dispatch({ type: "DELETE_SURVEY_FIELD", id: f.id })}
+                    >
+                      <Trash2 className="h-4 w-4 text-rose-500" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="New field label / title"
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                  />
+                  <select
+                    className="rounded-md border bg-background px-2 text-sm"
+                    value={type}
+                    onChange={(e) => {
+                      setType(e.target.value as "text" | "checkbox" | "checkbox_group");
+                      setOptions([]);
+                      setOptionInput("");
+                    }}
+                  >
+                    <option value="text">Text</option>
+                    <option value="checkbox">Checkbox</option>
+                    <option value="checkbox_group">Checkbox Group</option>
+                  </select>
+                </div>
+                {type === "checkbox_group" && (
+                  <div className="rounded-md border bg-muted/20 p-2 space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Add checkbox options for this group</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Option name (e.g. Crack, Chipped…)"
+                        value={optionInput}
+                        className="h-8 text-xs"
+                        onChange={(e) => setOptionInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addOption()}
+                      />
+                      <Button size="sm" variant="outline" onClick={addOption}><Plus className="h-3.5 w-3.5" /></Button>
+                    </div>
+                    {options.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {options.map((o) => (
+                          <span key={o} className="flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs">
+                            {o}
+                            <button
+                              type="button"
+                              className="ml-0.5 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeOption(o)}
+                            >×</button>
+                          </span>
                         ))}
                       </div>
                     )}
                   </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="shrink-0"
-                    onClick={() => dispatch({ type: "DELETE_SURVEY_FIELD", id: f.id })}
-                  >
-                    <Trash2 className="h-4 w-4 text-rose-500" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 space-y-2">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="New field label / title"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                />
-                <select
-                  className="rounded-md border bg-background px-2 text-sm"
-                  value={type}
-                  onChange={(e) => {
-                    setType(e.target.value as "text" | "checkbox" | "checkbox_group");
-                    setOptions([]);
-                    setOptionInput("");
-                  }}
-                >
-                  <option value="text">Text</option>
-                  <option value="checkbox">Checkbox</option>
-                  <option value="checkbox_group">Checkbox Group</option>
-                </select>
+                )}
+                <Button className="w-full" onClick={add}>
+                  <Plus className="mr-2 h-4 w-4" /> Add Field
+                </Button>
               </div>
-              {type === "checkbox_group" && (
-                <div className="rounded-md border bg-muted/20 p-2 space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Add checkbox options for this group</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Option name (e.g. Crack, Chipped…)"
-                      value={optionInput}
-                      className="h-8 text-xs"
-                      onChange={(e) => setOptionInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && addOption()}
-                    />
-                    <Button size="sm" variant="outline" onClick={addOption}><Plus className="h-3.5 w-3.5" /></Button>
-                  </div>
-                  {options.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-0.5">
-                      {options.map((o) => (
-                        <span key={o} className="flex items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-xs">
-                          {o}
-                          <button
-                            type="button"
-                            className="ml-0.5 text-muted-foreground hover:text-destructive"
-                            onClick={() => removeOption(o)}
-                          >×</button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              <Button className="w-full" onClick={add}>
-                <Plus className="mr-2 h-4 w-4" /> Add Field
-              </Button>
             </div>
-          </div>
-        </div>
-        <DialogFooter>
+          </TabsContent>
+
+          <TabsContent value="infopage" className="flex-1 overflow-y-auto mt-3">
+            <InfoPageCustomizer />
+          </TabsContent>
+        </Tabs>
+        <DialogFooter className="shrink-0 mt-3">
           <Button variant="outline" onClick={() => setOpen(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>

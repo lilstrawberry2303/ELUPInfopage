@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/dialog";
 import {
   FileText, MapPin, Search, ClipboardCheck, FileSignature,
-  CalendarClock, ArrowRight, Zap, Upload, Loader2, X,
+  CalendarClock, ArrowRight, Zap, Upload, Loader2, X, Info,
 } from "lucide-react";
+import { InformationTab } from "./InformationTab";
 import { toast } from "sonner";
 import type {
   GateType, DoorFrameCondition, MainDoorType, ElectDBBoxLocation,
@@ -79,11 +80,15 @@ export function SurveyorView() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="survey">Survey</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="optout">Opt-Out</TabsTrigger>
           <TabsTrigger value="chart">Chart</TabsTrigger>
+          <TabsTrigger value="info" className="flex items-center gap-1">
+            <Info className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Info</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="survey" className="mt-4 space-y-4">
@@ -199,6 +204,10 @@ export function SurveyorView() {
         <TabsContent value="chart" className="mt-4 space-y-4">
           <PrecinctFilter />
           <BlockChart onCellClick={setDrawerUnit} />
+        </TabsContent>
+
+        <TabsContent value="info" className="mt-4">
+          <InformationTab />
         </TabsContent>
       </Tabs>
 

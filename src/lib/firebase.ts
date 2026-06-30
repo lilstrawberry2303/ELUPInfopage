@@ -591,6 +591,25 @@ export async function saveBlockedDates(dates: unknown[]): Promise<void> {
   }
 }
 
+/** Save the information page content to Firestore (config/infoPage). */
+export async function saveInfoPageContent(content: unknown): Promise<void> {
+  try {
+    await setDoc(doc(db(), "config", "infoPage"), content as Record<string, unknown>);
+  } catch (e) {
+    console.warn("[firebase] config/infoPage write failed:", e);
+  }
+}
+
+/** Upload a diagram/illustration image to Firebase Storage. Returns download URL. */
+export async function uploadDiagramImage(file: File): Promise<string> {
+  const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+  if (!allowed.includes(file.type)) throw new Error("Only JPG, PNG or WebP images are allowed");
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const objectRef = ref(storage(), `info-diagrams/${Date.now()}-${safeName}`);
+  await uploadBytes(objectRef, file, { contentType: file.type });
+  return await getDownloadURL(objectRef);
+}
+
 /** Upload a document (PDF/DOCX/etc.) to Firebase Storage and return the download URL. */
 export async function uploadDocument(file: File, pathPrefix: string): Promise<string> {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
