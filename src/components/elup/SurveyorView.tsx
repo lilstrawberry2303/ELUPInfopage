@@ -16,13 +16,13 @@ import { CSScheduler } from "./CSScheduler";
 import { PrecinctFilter } from "./PrecinctFilter";
 import { UnitDrawer } from "./UnitDrawer";
 import { PhotoUploader } from "./PhotoUploader";
-import { syncUnit, logActivity, uploadSignatureToStorage, clearCsDraft } from "@/lib/firebase";
+import { syncUnit, logActivity, uploadSignatureToStorage, clearCsDraft, uploadSignatureFile } from "@/lib/firebase";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   FileText, MapPin, Search, ClipboardCheck, FileSignature,
-  CalendarClock, ArrowRight, Zap,
+  CalendarClock, ArrowRight, Zap, Upload, Loader2, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -598,6 +598,9 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
   const [unitKey, setUnitKey] = useState("");
   const [reason, setReason] = useState("");
   const [signature, setSignature] = useState("");
+  const [sigFileName, setSigFileName] = useState("");
+  const [sigUploading, setSigUploading] = useState(false);
+  const sigFileRef = useRef<HTMLInputElement>(null);
 
   const precincts = useMemo(
     () => Array.from(new Set(state.blocks.map((b) => b.precinct))).sort(),
@@ -615,6 +618,30 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
     [selectedBlock],
   );
 
+  async function handleSigFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !selBlockId || !unitKey) return;
+    e.target.value = "";
+    setSigUploading(true);
+    try {
+      const url = await uploadSignatureFile(file, `signatures/optout/${selBlockId}/${unitKey}`);
+      setSignature(url);
+      setSigFileName(file.name);
+    } catch (err: unknown) {
+      toast.error("Upload failed", { description: String((err as Error)?.message ?? err) });
+    } finally {
+      setSigUploading(false);
+    }
+  }
+
+  function clearSig() {
+    setSignature("");
+    setSigFileName("");
+    if (sigFileRef.current) sigFileRef.current.value = "";
+  }
+
+  const isImage = signature && !sigFileName.toLowerCase().endsWith(".pdf");
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -625,7 +652,7 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
       <CardContent className="space-y-3">
         <div>
           <Label>Precinct</Label>
-          <Select value={selPrecinct} onValueChange={(v) => { setSelPrecinct(v); setSelBlockId(""); setUnitKey(""); }}>
+          <Select value={selPrecinct} onValueChange={(v) => { setSelPrecinct(v); setSelBlockId(""); setUnitKey(""); clearSig(); }}>
             <SelectTrigger><SelectValue placeholder="Select precinct" /></SelectTrigger>
             <SelectContent>
               {precincts.map((p) => (
@@ -636,7 +663,7 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
         </div>
         <div>
           <Label>Block</Label>
-          <Select value={selBlockId} onValueChange={(v) => { setSelBlockId(v); setUnitKey(""); }} disabled={!selPrecinct}>
+          <Select value={selBlockId} onValueChange={(v) => { setSelBlockId(v); setUnitKey(""); clearSig(); }} disabled={!selPrecinct}>
             <SelectTrigger><SelectValue placeholder="Select block" /></SelectTrigger>
             <SelectContent>
               {blocksForPrecinct.map((b) => (
@@ -647,7 +674,7 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
         </div>
         <div>
           <Label>Unit</Label>
-          <Select value={unitKey} onValueChange={setUnitKey} disabled={!selBlockId}>
+          <Select value={unitKey} onValueChange={(v) => { setUnitKey(v); clearSig(); }} disabled={!selBlockId}>
             <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
             <SelectContent className="max-h-72">
               {unitOpts.map(([k, u]) => (
@@ -660,17 +687,75 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
           <Label>Reason for opting out</Label>
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
+
         <div>
           <Label>Resident signature</Label>
-          <SignatureCanvas onChange={setSignature} />
+          <input
+            ref={sigFileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,application/pdf"
+            className="hidden"
+            onChange={handleSigFile}
+          />
+          {!signature ? (
+            <button
+              type="button"
+              disabled={!unitKey || sigUploading}
+              onClick={() => sigFileRef.current?.click()}
+              className="mt-1 flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border-2 border-dashed border-border bg-muted/30 py-6 text-sm text-muted-foreground transition hover:border-primary/50 hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sigUploading ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+              ) : (
+                <><Upload className="h-4 w-4" /> Click to upload signature image or PDF</>
+              )}
+            </button>
+          ) : (
+            <div className="mt-1 rounded-md border bg-muted/30 p-2">
+              {isImage ? (
+                <img
+                  src={signature}
+                  alt="Resident signature"
+                  className="mx-auto max-h-28 max-w-full rounded bg-white object-contain"
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-2 py-1 text-sm">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="truncate">{sigFileName}</span>
+                </div>
+              )}
+              <div className="mt-2 flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs"
+                  disabled={sigUploading}
+                  onClick={() => sigFileRef.current?.click()}
+                >
+                  <Upload className="h-3 w-3" /> Replace
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+                  onClick={clearSig}
+                >
+                  <X className="h-3 w-3" /> Remove
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
+
         <Button
           className="w-full bg-yellow-500 hover:bg-yellow-600"
           disabled={!unitKey || !reason || !signature}
           onClick={() => {
             onSubmit(selBlockId, unitKey, reason, signature);
             setSelPrecinct(""); setSelBlockId(""); setUnitKey("");
-            setReason(""); setSignature("");
+            setReason(""); clearSig();
           }}
         >
           Submit Opt-Out for Approval
