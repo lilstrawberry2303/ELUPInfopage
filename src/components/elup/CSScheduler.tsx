@@ -63,7 +63,7 @@ export function CWScheduler() {
 
 function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConductSurvey?: (blockId: string, unitKey: string) => void }) {
   const { state, dispatch } = useElup();
-  const [filter, setFilter] = useState<"all" | "today" | "week" | "unassigned" | "custom">("all");
+  const [filter, setFilter] = useState<"all" | "today" | "week" | "custom">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filterPrecinct, setFilterPrecinct] = useState<string>("all");
@@ -124,7 +124,6 @@ function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConduct
         if (!hay.includes(q)) return false;
       }
       // Tab filters
-      if (filter === "unassigned") return !getAssignee(unit);
       if (filter === "today") {
         const t = parseDmy(getDate(unit));
         const today = new Date();
@@ -347,7 +346,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
 
           {/* Date-range pills */}
           <Filter className="h-3 w-3 text-muted-foreground" />
-          {(["all", "today", "week", "unassigned", "custom"] as const).map((f) => (
+          {(["all", "today", "week", "custom"] as const).map((f) => (
             <button
               key={f}
               onClick={() => { setFilter(f); setPage(1); }}
