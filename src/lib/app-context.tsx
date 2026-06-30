@@ -30,6 +30,8 @@ interface AppState {
   user: AppUser | null;
   settings: AppSettings;
   credentials: Credential[];
+  /** True once onAuthStateChanged has fired at least once — safe to open Firestore listeners */
+  authReady: boolean;
 }
 
 type AppAction =
@@ -38,7 +40,8 @@ type AppAction =
   | { type: "SET_LOGO"; url: string | null }
   | { type: "SET_DARK_MODE"; dark: boolean }
   | { type: "SET_CREDENTIALS"; credentials: Credential[] }
-  | { type: "UPDATE_CREDENTIAL"; org: string; uid?: string; oldUsername: string; newUsername: string; newPassword: string };
+  | { type: "UPDATE_CREDENTIAL"; org: string; uid?: string; oldUsername: string; newUsername: string; newPassword: string }
+  | { type: "AUTH_READY" };
 
 const SESSION_KEY = "elup_session";
 
@@ -69,6 +72,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, settings: { ...state.settings, darkMode: action.dark } };
     case "SET_CREDENTIALS":
       return { ...state, credentials: action.credentials };
+    case "AUTH_READY":
+      return { ...state, authReady: true };
     case "UPDATE_CREDENTIAL": {
       const updatedCredentials = state.credentials.map((c) =>
         c.org === action.org && c.username.toLowerCase() === action.oldUsername.toLowerCase()
@@ -92,6 +97,7 @@ const initialState: AppState = {
   user: null,
   settings: { logoUrl: null, darkMode: false },
   credentials: DEFAULT_CREDENTIALS,
+  authReady: false,
 };
 
 const AppContext = createContext<{
@@ -129,8 +135,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [state.user]);
 
-  // Sync logo URL from Firestore settings/app
+  // Wait for Firebase Auth to settle before opening Firestore listeners.
+  // onAuthStateChanged fires once the SDK has resolved the cached token from
+  // IndexedDB — until then, currentUser is null and Firestore rules reject
+  // any request, permanently killing the listener on error.
   useEffect(() => {
+    const unsub = onAuthStateChanged(auth(), () => {
+      dispatch({ type: "AUTH_READY" });
+      unsub(); // only need the first callback — auth state is now known
+    });
+    return () => unsub();
+  }, []);
+
+  // Sync logo URL from Firestore settings/app — only after auth is ready
+  useEffect(() => {
+    if (!state.authReady) return;
     const unsub = onSnapshot(
       doc(db(), "settings", "app"),
       (snap) => {
@@ -141,12 +160,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (err) => console.error("[AppContext] settings listener:", err),
     );
     return () => unsub();
-  }, []);
+  }, [state.authReady]);
 
-  // Sync login credentials from Firestore /users collection.
-  // Supports both legacy docs (/users/{username} with password field) and
-  // Firebase Auth docs (/users/{uid} with uid field, no password).
+  // Sync login credentials from Firestore /users — only after auth is ready
   useEffect(() => {
+    if (!state.authReady) return;
     const unsub = onSnapshot(
       collection(db(), "users"),
       (snap) => {
@@ -173,20 +191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       (err) => console.error("[AppContext] users listener:", err),
     );
     return () => unsub();
-  }, []);
-
-  // Mirror Firebase Auth state into the app session.
-  // When Firebase Auth has a current user but the app has no session
-  // (e.g. after a page refresh with a valid Auth token), attempt to restore
-  // from localStorage first; if that fails we rely on the Auth listener here.
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth(), () => {
-      // Auth state changes are handled via localStorage session + loginWithUsername;
-      // this listener is intentionally kept as a no-op hook to initialise the
-      // Auth SDK early so currentUser is available synchronously in other calls.
-    });
-    return () => unsub();
-  }, []);
+  }, [state.authReady]);
 
   return <AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>;
 }

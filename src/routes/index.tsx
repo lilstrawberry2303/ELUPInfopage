@@ -31,6 +31,17 @@ function Index() {
 function AppShell() {
   const { state: appState } = useApp();
 
+  // Wait for Firebase Auth SDK to settle before rendering anything.
+  // Until authReady is true, currentUser is null and Firestore listeners
+  // would immediately fail with permission-denied — killing them permanently.
+  if (!appState.authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-sky-600" />
+      </div>
+    );
+  }
+
   if (!appState.user) {
     return <LoginPage />;
   }
