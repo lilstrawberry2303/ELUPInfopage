@@ -6,25 +6,47 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Info, ImageIcon, HelpCircle, Languages, Volume2, Square, ChevronDown } from "lucide-react";
 
-// BCP 47 locale tags per language filter
-const LANG_BCP47: Record<InfoLanguage, string> = {
+// Primary BCP 47 tag set on utterance.lang (used as the final fallback)
+const LANG_PRIMARY: Record<InfoLanguage, string> = {
   en: "en-SG",
   ms: "ms-SG",
   zh: "zh-CN",
-  ta: "ta-SG",
+  ta: "ta-IN",  // ta-SG does not exist in any browser; ta-IN is the only shipped Tamil voice
 };
+
+// Ordered locale prefixes to try when searching available voices.
+// Most browsers ship: ta-IN (Chrome), ms-MY (Chrome/Safari), zh-CN/zh-TW, en-*
+const LANG_VOICE_PRIORITY: Record<InfoLanguage, string[]> = {
+  en: ["en-SG", "en-GB", "en-US", "en-AU", "en"],
+  ms: ["ms-SG", "ms-MY", "ms"],
+  zh: ["zh-CN", "zh-TW", "zh-HK", "zh"],
+  ta: ["ta-SG", "ta-IN", "ta"],   // ta-SG tried first in case future browsers add it
+};
+
+function findVoice(lang: InfoLanguage): SpeechSynthesisVoice | null {
+  const voices = window.speechSynthesis.getVoices();
+  for (const prefix of LANG_VOICE_PRIORITY[lang]) {
+    const match = voices.find((v) =>
+      v.lang.toLowerCase() === prefix.toLowerCase() ||
+      v.lang.toLowerCase().startsWith(prefix.toLowerCase() + "-")
+    );
+    if (match) return match;
+  }
+  // Last resort: any voice whose lang starts with the language code
+  const langCode = LANG_VOICE_PRIORITY[lang].at(-1)!; // e.g. "ta"
+  return voices.find((v) => v.lang.toLowerCase().startsWith(langCode)) ?? null;
+}
 
 function speakText(text: string, lang: InfoLanguage): SpeechSynthesisUtterance {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = LANG_BCP47[lang];
+  utterance.lang = LANG_PRIMARY[lang];
 
-  // Rule 3: bind to first voice that matches the BCP 47 tag; fall back to lang string
-  const voices = window.speechSynthesis.getVoices();
-  const match = voices.find((v) =>
-    v.lang.toLowerCase().includes(LANG_BCP47[lang].toLowerCase())
-  );
-  if (match) utterance.voice = match;
+  const voice = findVoice(lang);
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang; // align lang to the actual voice locale
+  }
 
   window.speechSynthesis.speak(utterance);
   return utterance;
