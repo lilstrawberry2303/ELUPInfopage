@@ -856,7 +856,10 @@ function DayTimetable({
     } else if (slotLabel <= pickStart) {
       setPickStart(slotLabel);
     } else {
-      onPick?.(`${pickStart}-${slotLabel}`);
+      // End = end of the clicked slot (label + 1h), capped at 18:00
+      const h = parseInt(slotLabel.split(":")[0], 10);
+      const endStr = `${String(Math.min(h + 1, 18)).padStart(2, "0")}:00`;
+      onPick?.(`${pickStart}-${endStr}`);
       setPickStart(null);
     }
   }
