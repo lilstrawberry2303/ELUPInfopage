@@ -29,7 +29,7 @@ import type {
   GateType, DoorFrameCondition, MainDoorType, ElectDBBoxLocation,
   WallCondition, CeilingCondition,
 } from "@/lib/elup/types";
-import { TIME_SLOTS, parseRange, hourlySlots, rangeOverlaps } from "@/lib/elup/slots";
+import { HOUR_OPTIONS, parseRange, hourlySlots, rangeOverlaps } from "@/lib/elup/slots";
 
 function todayDmy() {
   const d = new Date();
@@ -709,7 +709,15 @@ function CableWorkScheduleDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [d, setD] = useState(date);
-  const [t, setT] = useState(time || "09:00-10:00");
+  const [cwStart, setCwStart] = useState(() => {
+    const tt = time || "09:00-10:00";
+    return tt.includes("-") ? tt.split("-")[0] : "09:00";
+  });
+  const [cwEnd, setCwEnd] = useState(() => {
+    const tt = time || "09:00-10:00";
+    return tt.includes("-") ? tt.split("-")[1] : "10:00";
+  });
+  const t = `${cwStart}-${cwEnd}`;
   const [tech, setTech] = useState("");
   const { state } = useElup();
   const technicians = useMemo(
@@ -740,7 +748,9 @@ function CableWorkScheduleDialog({
   }, [d, bookedSlots]);
 
   const sel = parseRange(t);
-  const clash = dayBookings.some((s) => rangeOverlaps(parseRange(s.time), sel));
+  const clash = dayBookings.some(
+    (s) => s.assignee && tech && s.assignee === tech && rangeOverlaps(parseRange(s.time), sel),
+  );
   const blockedDate = d
     ? state.blockedDates?.find(
         (b) => b.date === fmtDmy(d) && (b.type === "both" || b.type === "CW"),
@@ -776,36 +786,59 @@ function CableWorkScheduleDialog({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="form" className="mt-3 space-y-3">
+            <div>
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={d}
+                onChange={(e) => setD(e.target.value)}
+                className={blockedDate ? "border-destructive ring-1 ring-destructive" : ""}
+              />
+              {blockedDate && (
+                <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                  <span>🚫</span>
+                  <span>
+                    Blocked for {blockedDate.type === "both" ? "CS \u0026 CW" : blockedDate.type}
+                    {blockedDate.reason ? ` — ${blockedDate.reason}` : ""}
+                  </span>
+                </p>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={d}
-                  onChange={(e) => setD(e.target.value)}
-                  className={blockedDate ? "border-destructive ring-1 ring-destructive" : ""}
-                />
-                {blockedDate && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                    <span>🚫</span>
-                    <span>
-                      Blocked for {blockedDate.type === "both" ? "CS \u0026 CW" : blockedDate.type}
-                      {blockedDate.reason ? ` — ${blockedDate.reason}` : ""}
-                    </span>
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Time slot</Label>
-                <Select value={t} onValueChange={setT}>
+                <Label>Start time</Label>
+                <Select
+                  value={cwStart}
+                  onValueChange={(v) => {
+                    setCwStart(v);
+                    if (cwEnd <= v) setCwEnd(HOUR_OPTIONS.find((h) => h > v) ?? "18:00");
+                  }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {TIME_SLOTS.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    {HOUR_OPTIONS.filter((h) => h < "18:00").map((h) => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>End time</Label>
+                <Select value={cwEnd} onValueChange={setCwEnd}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HOUR_OPTIONS.filter((h) => h > cwStart).map((h) => (
+                      <SelectItem key={h} value={h}>{h}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground -mt-1">
+              Selected: <span className="font-medium text-foreground">{t}</span>
+              <span className="ml-2 text-muted-foreground">
+                ({Math.round((parseRange(t)[1] - parseRange(t)[0]) / 60)}h)
+              </span>
             </div>
             {clash && (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -825,11 +858,24 @@ function CableWorkScheduleDialog({
             </div>
           </TabsContent>
           <TabsContent value="timetable" className="mt-3">
-            <CWDayTimetable date={d} bookings={dayBookings} currentTime={t} onPick={setT} />
+            <CWDayTimetable
+              date={d}
+              bookings={dayBookings}
+              currentTime={t}
+              assignee={tech}
+              onPick={(range) => {
+                const [s, e] = range.split("-");
+                if (s && e) { setCwStart(s); setCwEnd(e); }
+              }}
+            />
           </TabsContent>
         </Tabs>
         <DialogFooter>
-          <Button variant="outline" onClick={() => { setD(date); setT(time || "10:00"); setTech(""); setOpen(false); }}>
+          <Button variant="outline" onClick={() => {
+            const initStart = (time || "09:00-10:00").split("-")[0];
+            const initEnd = (time || "09:00-10:00").split("-")[1] ?? "10:00";
+            setD(date); setCwStart(initStart); setCwEnd(initEnd); setTech(""); setOpen(false);
+          }}>
             Cancel
           </Button>
           <Button
@@ -861,8 +907,16 @@ function CableWorkScheduleDialog({
 }
 
 function CWDayTimetable({
-  date, bookings, currentTime, onPick,
-}: { date: string; bookings: CWBookedSlot[]; currentTime: string; onPick?: (slot: string) => void }) {
+  date, bookings, currentTime, assignee, onPick,
+}: {
+  date: string;
+  bookings: CWBookedSlot[];
+  currentTime: string;
+  assignee?: string;
+  onPick?: (range: string) => void;
+}) {
+  const [pickStart, setPickStart] = useState<string | null>(null);
+
   if (!date) {
     return (
       <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
@@ -873,38 +927,76 @@ function CWDayTimetable({
   const slots = hourlySlots();
   const cur = parseRange(currentTime);
 
+  function handleRowClick(slotLabel: string) {
+    if (!pickStart) {
+      setPickStart(slotLabel);
+    } else if (slotLabel <= pickStart) {
+      setPickStart(slotLabel);
+    } else {
+      onPick?.(`${pickStart}-${slotLabel}`);
+      setPickStart(null);
+    }
+  }
+
   return (
     <div className="space-y-1">
       <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>Existing CW bookings on <span className="font-semibold text-foreground">{fmtDmy(date)}</span></span>
-        <span className="italic">Click a slot to select</span>
+        <span>CW bookings on <span className="font-semibold text-foreground">{fmtDmy(date)}</span></span>
+        <span className="italic">
+          {pickStart ? (
+            <span className="text-emerald-600 font-medium">Start: {pickStart} — now click end time</span>
+          ) : (
+            "Click start time, then end time"
+          )}
+        </span>
       </div>
-      <div className="max-h-[300px] overflow-y-auto rounded-md border">
+      <div className="max-h-[320px] overflow-y-auto rounded-md border">
         {slots.map((slot) => {
           const items = bookings.filter((b) => rangeOverlaps(parseRange(b.time), [slot.start, slot.end]));
+          const sameAssigneeItems = items.filter((b) => assignee && b.assignee === assignee);
           const isCurrent = rangeOverlaps(cur, [slot.start, slot.end]);
+          const hasClash = isCurrent && sameAssigneeItems.length > 0;
+          const isPickStart = pickStart === slot.label;
+          const isInPickRange = pickStart !== null && slot.label > pickStart;
+
+          let rowBg = "";
+          if (isPickStart) rowBg = "bg-emerald-50 ring-1 ring-emerald-400";
+          else if (isInPickRange) rowBg = "bg-emerald-50/40";
+          else if (isCurrent) rowBg = "bg-orange-50 ring-1 ring-orange-400";
+
           return (
             <button
               type="button"
               key={slot.label}
-              onClick={() => onPick?.(slot.label)}
-              className={`flex w-full gap-2 border-b px-2 py-1.5 text-left text-xs transition last:border-0 hover:bg-muted/60 ${
-                isCurrent ? "bg-orange-50 ring-1 ring-orange-400" : ""
-              }`}
+              onClick={() => handleRowClick(slot.label)}
+              className={`flex w-full gap-2 border-b px-2 py-1.5 text-left text-xs transition last:border-0 hover:bg-muted/60 ${rowBg}`}
             >
-              <div className="w-24 shrink-0 font-mono text-muted-foreground">{slot.label}</div>
+              <div className={`w-16 shrink-0 font-mono font-semibold ${isPickStart ? "text-emerald-700" : "text-muted-foreground"}`}>
+                {slot.label}
+              </div>
               <div className="flex flex-1 flex-wrap gap-1">
                 {items.length === 0 && (
                   <span className="text-muted-foreground/60">
-                    {isCurrent ? "← your selected slot (free)" : "free"}
+                    {isPickStart ? "← start selected" : isCurrent ? "← your slot (free)" : "free"}
                   </span>
                 )}
-                {items.map((b, i) => (
-                  <span key={i} className="rounded border border-orange-300 bg-orange-100 px-1.5 py-0.5 font-medium text-orange-900">
-                    {b.label}{b.assignee ? ` · ${b.assignee}` : ""} <span className="opacity-60">({b.time})</span>
-                  </span>
-                ))}
-                {isCurrent && items.length > 0 && (
+                {items.map((b, i) => {
+                  const isSameAssignee = assignee && b.assignee === assignee;
+                  return (
+                    <span
+                      key={i}
+                      className={`rounded border px-1.5 py-0.5 font-medium ${
+                        isSameAssignee
+                          ? "border-orange-300 bg-orange-100 text-orange-900"
+                          : "border-border bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {b.label}{b.assignee ? ` · ${b.assignee}` : ""}
+                      <span className="ml-1 opacity-60">({b.time})</span>
+                    </span>
+                  );
+                })}
+                {hasClash && (
                   <span className="rounded border border-destructive bg-destructive/10 px-1.5 py-0.5 font-semibold text-destructive">
                     OVERLAP
                   </span>
@@ -914,6 +1006,17 @@ function CWDayTimetable({
           );
         })}
       </div>
+      {pickStart && (
+        <p className="text-center text-xs text-muted-foreground">
+          <button
+            type="button"
+            className="underline hover:text-foreground"
+            onClick={() => setPickStart(null)}
+          >
+            Cancel selection
+          </button>
+        </p>
+      )}
     </div>
   );
 }

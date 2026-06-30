@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { TIME_SLOTS, CW_TIME_SLOTS, HOUR_OPTIONS } from "@/lib/elup/slots";
+import { HOUR_OPTIONS } from "@/lib/elup/slots";
 import { uploadSignatureFile } from "@/lib/firebase";
 import { PhotoUploader } from "./PhotoUploader";
 import { DocumentUploader } from "./DocumentUploader";
@@ -965,13 +965,12 @@ function EditSurveyDialog({
             <div><Label className="text-xs">CW scheduled date</Label><Input type="date" value={cwDate} onChange={(e) => setCwDate(e.target.value)} className="h-8 text-sm" /></div>
             <div>
               <Label className="text-xs">CW scheduled time</Label>
-              <Select value={cwTime || "none"} onValueChange={(v) => setCwTime(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {CW_TIME_SLOTS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Input
+                value={cwTime}
+                onChange={(e) => setCwTime(e.target.value)}
+                placeholder="e.g. 09:00-11:00"
+                className="h-8 text-sm"
+              />
             </div>
           </div>
           <div>
@@ -1032,8 +1031,6 @@ function ScheduleQuickDialog({
   const existingAssignee = isCS ? unit.csAssignee : unit.cwAssignee;
 
   const [date, setDate]       = useState(dmyToIso(existingDate));
-  const [time, setTime]       = useState(existingTime ?? "09:00-10:00");
-  // CW: separate start/end hour pickers
   const [cwStart, setCwStart] = useState(() =>
     (existingTime?.includes("-") ? existingTime.split("-")[0] : null) ?? "08:00",
   );
@@ -1048,9 +1045,9 @@ function ScheduleQuickDialog({
 
   const submit = () => {
     if (!date) { toast.error("Date required"); return; }
-    if (!isCS && cwEnd <= cwStart) { toast.error("End time must be after start time"); return; }
+    if (cwEnd <= cwStart) { toast.error("End time must be after start time"); return; }
     const dateStr      = fmtDmy(date);
-    const resolvedTime = isCS ? time : `${cwStart}-${cwEnd}`;
+    const resolvedTime = `${cwStart}-${cwEnd}`;
     const patch: Partial<UnitData> = isCS
       ? { csStatus: "scheduled", csDate: dateStr, csTime: resolvedTime, csAssignee: assignee }
       : { cwStatus: "scheduled", cwDate: dateStr, cwTime: resolvedTime, cwAssignee: assignee };
@@ -1071,49 +1068,40 @@ function ScheduleQuickDialog({
           <DialogTitle>{existingDate ? `Reschedule ${isCS ? "CS" : "CW"}` : `Schedule ${isCS ? "CS" : "CW"}`}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          {isCS ? (
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-              <div>
-                <Label>Time</Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={time} onChange={(e) => setTime(e.target.value)}>
-                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
+          <div>
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Start</Label>
+              <Select value={cwStart} onValueChange={(v) => {
+                setCwStart(v);
+                if (cwEnd <= v) setCwEnd(HOUR_OPTIONS.find((h) => h > v) ?? "18:00");
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {HOUR_OPTIONS.filter((h) => h < "18:00").map((h) => (
+                    <SelectItem key={h} value={h}>{h}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label>Date</Label>
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div>
-                <Label>Start</Label>
-                <Select value={cwStart} onValueChange={(v) => {
-                  setCwStart(v);
-                  if (cwEnd <= v) setCwEnd(HOUR_OPTIONS.find((h) => h > v) ?? "18:00");
-                }}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {HOUR_OPTIONS.filter((h) => h < "18:00").map((h) => (
-                      <SelectItem key={h} value={h}>{h}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>End</Label>
-                <Select value={cwEnd} onValueChange={setCwEnd}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {endOptions.map((h) => (
-                      <SelectItem key={h} value={h}>{h}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label>End</Label>
+              <Select value={cwEnd} onValueChange={setCwEnd}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {endOptions.map((h) => (
+                    <SelectItem key={h} value={h}>{h}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
+          </div>
+          <div className="text-xs text-muted-foreground -mt-1">
+            Selected: <span className="font-medium text-foreground">{cwStart}-{cwEnd}</span>
+          </div>
           <div>
             <Label>{isCS ? "Surveyor" : "Technician"}</Label>
             <Select value={assignee} onValueChange={setAssignee}>
