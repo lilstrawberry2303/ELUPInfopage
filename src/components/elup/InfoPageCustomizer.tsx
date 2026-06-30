@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useImperativeHandle, forwardRef } from "react";
 import { useElup } from "@/lib/elup/store";
 import { INFO_LANGUAGES, DEFAULT_INFO_PAGE, type InfoLanguage, type InfoParagraph, type InfoDiagram, type InfoFAQ, type InfoPageContent } from "@/lib/elup/types";
 import { Button } from "@/components/ui/button";
@@ -110,11 +110,9 @@ function ParagraphsEditor({ content, onChange }: { content: InfoPageContent; onC
     if (!draft.title.en.trim()) return toast.error("English title required");
     onChange({ ...content, paragraphs: content.paragraphs.map((p) => p.id === draft.id ? draft : p) });
     setEditingId(null); setDraft(null);
-    toast.success("Paragraph updated");
   };
   const deletePara = (id: string) => {
     onChange({ ...content, paragraphs: content.paragraphs.filter((p) => p.id !== id) });
-    toast.success("Paragraph removed");
   };
   const addPara = () => {
     if (!newPara.title.en.trim()) return toast.error("English title required");
@@ -122,7 +120,6 @@ function ParagraphsEditor({ content, onChange }: { content: InfoPageContent; onC
     onChange({ ...content, paragraphs: [...content.paragraphs, { ...newPara, id: `p-${Date.now()}` }] });
     setNewPara({ id: "", title: emptyI18n(), content: emptyI18n() });
     setAdding(false);
-    toast.success("Paragraph added");
   };
 
   return (
@@ -201,11 +198,9 @@ function DiagramsEditor({ content, onChange }: { content: InfoPageContent; onCha
   const saveCaption = (id: string) => {
     onChange({ ...content, diagrams: content.diagrams.map((d) => d.id === id ? { ...d, caption: draftCaption } : d) });
     setEditingId(null);
-    toast.success("Caption saved");
   };
   const deleteDiagram = (id: string) => {
     onChange({ ...content, diagrams: content.diagrams.filter((d) => d.id !== id) });
-    toast.success("Diagram removed");
   };
 
   return (
@@ -274,11 +269,9 @@ function FAQsEditor({ content, onChange }: { content: InfoPageContent; onChange:
     if (!draft.question.en.trim()) return toast.error("English question required");
     onChange({ ...content, faqs: content.faqs.map((f) => f.id === draft.id ? draft : f) });
     setEditingId(null); setDraft(null);
-    toast.success("FAQ updated");
   };
   const deleteFaq = (id: string) => {
     onChange({ ...content, faqs: content.faqs.filter((f) => f.id !== id) });
-    toast.success("FAQ removed");
   };
   const addFaq = () => {
     if (!newFaq.question.en.trim()) return toast.error("English question required");
@@ -286,7 +279,6 @@ function FAQsEditor({ content, onChange }: { content: InfoPageContent; onChange:
     onChange({ ...content, faqs: [...content.faqs, { ...newFaq, id: `faq-${Date.now()}` }] });
     setNewFaq({ id: "", question: emptyI18n(), answer: emptyI18n() });
     setAdding(false);
-    toast.success("FAQ added");
   };
 
   return (
@@ -338,33 +330,29 @@ function FAQsEditor({ content, onChange }: { content: InfoPageContent; onChange:
   );
 }
 
+export interface InfoPageCustomizerHandle {
+  save: () => Promise<void>;
+}
+
 // ---- Main exported component ----
-export function InfoPageCustomizer() {
+export const InfoPageCustomizer = forwardRef<InfoPageCustomizerHandle>(function InfoPageCustomizer(_props, ref) {
   const { state, dispatch } = useElup();
   const [localContent, setLocalContent] = useState<InfoPageContent>(() => state.infoPageContent);
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
 
   const handleChange = (updated: InfoPageContent) => {
     setLocalContent(updated);
-    setDirty(true);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      dispatch({ type: "SAVE_INFO_CONTENT", content: localContent });
-      setDirty(false);
-      toast.success("Information page saved");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleReset = () => {
     setLocalContent(DEFAULT_INFO_PAGE);
-    setDirty(true);
   };
+
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      dispatch({ type: "SAVE_INFO_CONTENT", content: localContent });
+      toast.success("Information page saved");
+    },
+  }));
 
   return (
     <div className="space-y-4">
@@ -399,20 +387,6 @@ export function InfoPageCustomizer() {
           <FAQsEditor content={localContent} onChange={handleChange} />
         </TabsContent>
       </Tabs>
-
-      {dirty && (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 flex items-center justify-between">
-          <p className="text-xs text-sky-700 font-medium">You have unsaved changes.</p>
-          <Button
-            size="sm"
-            className="h-7 bg-sky-600 hover:bg-sky-700 text-xs"
-            disabled={saving}
-            onClick={handleSave}
-          >
-            {saving ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Saving…</> : "Save Changes"}
-          </Button>
-        </div>
-      )}
     </div>
   );
-}
+});

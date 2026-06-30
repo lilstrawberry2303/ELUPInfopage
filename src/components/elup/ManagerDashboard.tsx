@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef} from "react";
 import { collection, query, orderBy, limit, onSnapshot, type Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { BlockChart } from "./BlockChart";
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useElup, useActiveBlock } from "@/lib/elup/store";
 import { usePrecincts } from "@/lib/elup/firestore";
-import { InfoPageCustomizer } from "./InfoPageCustomizer";
+import { InfoPageCustomizer, type InfoPageCustomizerHandle } from "./InfoPageCustomizer";
 import {
   Activity, Building, CalendarPlus, CheckCircle2, ClipboardList,
   Plus, PieChart as PieIcon, Zap, Flag, Settings2, Pencil, Trash2, CalendarDays,
@@ -393,6 +393,8 @@ const DEFAULT_GROUPS: { id: import("@/lib/elup/types").DefaultSurveyGroup; label
 function SurveyFormCustomizer() {
   const { state, dispatch } = useElup();
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("survey");
+  const infoRef = useRef<InfoPageCustomizerHandle>(null);
   const [label, setLabel] = useState("");
   const [type, setType] = useState<"text" | "checkbox" | "checkbox_group">("text");
   // For checkbox_group: option name input + list
@@ -437,7 +439,7 @@ function SurveyFormCustomizer() {
       </DialogTrigger>
       <DialogContent className="max-w-xl max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>Customise CS</DialogTitle></DialogHeader>
-        <Tabs defaultValue="survey" className="flex-1 min-h-0 flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
           <TabsList className="grid w-full grid-cols-2 shrink-0">
             <TabsTrigger value="survey">Survey Form</TabsTrigger>
             <TabsTrigger value="infopage">Information Page</TabsTrigger>
@@ -551,11 +553,14 @@ function SurveyFormCustomizer() {
           </TabsContent>
 
           <TabsContent value="infopage" className="flex-1 overflow-y-auto mt-3">
-            <InfoPageCustomizer />
+            <InfoPageCustomizer ref={infoRef} />
           </TabsContent>
         </Tabs>
         <DialogFooter className="shrink-0 mt-3">
-          <Button variant="outline" onClick={() => setOpen(false)}>Done</Button>
+          <Button onClick={async () => {
+            if (activeTab === "infopage") await infoRef.current?.save();
+            setOpen(false);
+          }}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
