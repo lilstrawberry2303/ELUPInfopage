@@ -1,26 +1,114 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useElup } from "@/lib/elup/store";
 import { INFO_LANGUAGES, type InfoLanguage } from "@/lib/elup/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Info, ImageIcon, HelpCircle, Languages } from "lucide-react";
+import { Info, ImageIcon, HelpCircle, Languages, Volume2, Square, ChevronDown } from "lucide-react";
+
+// BCP 47 locale tags per language filter
+const LANG_BCP47: Record<InfoLanguage, string> = {
+  en: "en-SG",
+  ms: "ms-SG",
+  zh: "zh-CN",
+  ta: "ta-SG",
+};
+
+function speakText(text: string, lang: InfoLanguage): SpeechSynthesisUtterance {
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = LANG_BCP47[lang];
+
+  // Rule 3: bind to first voice that matches the BCP 47 tag; fall back to lang string
+  const voices = window.speechSynthesis.getVoices();
+  const match = voices.find((v) =>
+    v.lang.toLowerCase().includes(LANG_BCP47[lang].toLowerCase())
+  );
+  if (match) utterance.voice = match;
+
+  window.speechSynthesis.speak(utterance);
+  return utterance;
+}
+
+// Standalone read-aloud toggle button (never nested inside another button)
+function ReadAloudButton({
+  id,
+  text,
+  lang,
+  playingId,
+  onPlay,
+  onStop,
+}: {
+  id: string;
+  text: string;
+  lang: InfoLanguage;
+  playingId: string | null;
+  onPlay: (id: string, text: string) => void;
+  onStop: () => void;
+}) {
+  const isPlaying = playingId === id;
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className={`h-7 w-7 shrink-0 ${
+        isPlaying ? "text-sky-600" : "text-muted-foreground hover:text-sky-600"
+      }`}
+      title={isPlaying ? "Stop reading" : "Read aloud"}
+      onClick={(e) => {
+        e.stopPropagation();
+        isPlaying ? onStop() : onPlay(id, text);
+      }}
+    >
+      {isPlaying ? (
+        <Square className="h-3.5 w-3.5 fill-sky-600" />
+      ) : (
+        <Volume2 className="h-3.5 w-3.5" />
+      )}
+    </Button>
+  );
+}
 
 export function InformationTab() {
   const { state } = useElup();
   const { paragraphs, diagrams, faqs } = state.infoPageContent;
   const [lang, setLang] = useState<InfoLanguage>("en");
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [openFaqId, setOpenFaqId] = useState<string | null>(null);
 
   const t = (map: Record<InfoLanguage, string> | undefined): string => {
     if (!map) return "";
     return map[lang] || map["en"] || "";
   };
+
+  // Rule 4: cancel immediately when language changes
+  const switchLang = (code: InfoLanguage) => {
+    window.speechSynthesis.cancel();
+    setPlayingId(null);
+    setLang(code);
+  };
+
+  // Rule 4: cancel when component unmounts (tab navigation)
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  const handlePlay = useCallback(
+    (id: string, text: string) => {
+      setPlayingId(id);
+      const utterance = speakText(text, lang);
+      utterance.onend = () => setPlayingId(null);
+      utterance.onerror = () => setPlayingId(null);
+    },
+    [lang]
+  );
+
+  const handleStop = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setPlayingId(null);
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -34,8 +122,10 @@ export function InformationTab() {
               key={l.code}
               size="sm"
               variant={lang === l.code ? "default" : "outline"}
-              className={`h-7 px-2.5 text-xs ${lang === l.code ? "bg-sky-600 hover:bg-sky-700" : ""}`}
-              onClick={() => setLang(l.code)}
+              className={`h-7 px-2.5 text-xs ${
+                lang === l.code ? "bg-sky-600 hover:bg-sky-700" : ""
+              }`}
+              onClick={() => switchLang(l.code)}
             >
               {l.nativeLabel}
             </Button>
@@ -43,31 +133,45 @@ export function InformationTab() {
         </div>
       </div>
 
-      {/* Paragraphs */}
+      {/* About the Programme — TTS per card */}
       {paragraphs.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-sky-700 uppercase tracking-wide">
             <Info className="h-4 w-4" />
             About the Programme
           </div>
-          {paragraphs.map((p) => (
-            <Card key={p.id} className="border-sky-100">
-              <CardHeader className="pb-2 pt-4">
-                <CardTitle className="text-sm font-semibold leading-snug text-foreground">
-                  {t(p.title)}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pb-4">
-                <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-                  {t(p.content)}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+          {paragraphs.map((p) => {
+            const titleText = t(p.title);
+            const bodyText = t(p.content);
+            return (
+              <Card key={p.id} className="border-sky-100">
+                <CardHeader className="pb-2 pt-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-sm font-semibold leading-snug text-foreground">
+                      {titleText}
+                    </CardTitle>
+                    <ReadAloudButton
+                      id={p.id}
+                      text={`${titleText}. ${bodyText}`}
+                      lang={lang}
+                      playingId={playingId}
+                      onPlay={handlePlay}
+                      onStop={handleStop}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="pb-4">
+                  <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+                    {bodyText}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      {/* Diagrams */}
+      {/* Diagram Illustrations — no TTS */}
       {diagrams.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-sky-700 uppercase tracking-wide">
@@ -98,7 +202,7 @@ export function InformationTab() {
         </div>
       )}
 
-      {/* FAQs */}
+      {/* FAQs — custom collapsible to avoid button-in-button (TTS per item) */}
       {faqs.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-sky-700 uppercase tracking-wide">
@@ -106,19 +210,47 @@ export function InformationTab() {
             Frequently Asked Questions
             <Badge variant="outline" className="ml-auto text-xs">{faqs.length}</Badge>
           </div>
-          <Accordion type="single" collapsible className="rounded-lg border divide-y">
-            {faqs.map((faq, i) => (
-              <AccordionItem key={faq.id} value={faq.id} className="border-0 px-3">
-                <AccordionTrigger className="text-sm font-medium text-left py-3 hover:no-underline">
-                  <span className="mr-2 shrink-0 text-sky-600 font-bold text-xs">Q{i + 1}</span>
-                  {t(faq.question)}
-                </AccordionTrigger>
-                <AccordionContent className="pb-3 text-sm text-muted-foreground leading-relaxed pl-5">
-                  {t(faq.answer)}
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <div className="rounded-lg border divide-y">
+            {faqs.map((faq, i) => {
+              const questionText = t(faq.question);
+              const answerText = t(faq.answer);
+              const isOpen = openFaqId === faq.id;
+              return (
+                <div key={faq.id}>
+                  {/* Header row: expand toggle + question + TTS button as siblings */}
+                  <div className="flex items-center gap-1 px-3">
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center gap-2 py-3 text-left text-sm font-medium hover:text-sky-700 transition-colors"
+                      onClick={() => setOpenFaqId(isOpen ? null : faq.id)}
+                    >
+                      <span className="shrink-0 text-sky-600 font-bold text-xs">Q{i + 1}</span>
+                      <span className="flex-1">{questionText}</span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {/* TTS button is a sibling of the toggle button, not nested inside it */}
+                    <ReadAloudButton
+                      id={faq.id}
+                      text={`${questionText}. ${answerText}`}
+                      lang={lang}
+                      playingId={playingId}
+                      onPlay={handlePlay}
+                      onStop={handleStop}
+                    />
+                  </div>
+                  {isOpen && (
+                    <div className="px-3 pb-3 pl-9 text-sm text-muted-foreground leading-relaxed">
+                      {answerText}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
