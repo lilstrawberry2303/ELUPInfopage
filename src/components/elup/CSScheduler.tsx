@@ -63,11 +63,13 @@ export function CWScheduler() {
 
 function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConductSurvey?: (blockId: string, unitKey: string) => void }) {
   const { state, dispatch } = useElup();
-  const [filter, setFilter] = useState<"all" | "today" | "week" | "unassigned">("all");
+  const [filter, setFilter] = useState<"all" | "today" | "week" | "unassigned" | "custom">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filterPrecinct, setFilterPrecinct] = useState<string>("all");
   const [filterBlockId, setFilterBlockId] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const PAGE_SIZE = 10;
 
   const isCS = mode === "CS";
@@ -109,6 +111,8 @@ function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConduct
     const now = Date.now();
     const wk = now + 7 * 24 * 3600 * 1000;
     const q = search.trim().toLowerCase();
+    const fromTs = dateFrom ? new Date(dateFrom).getTime() : null;
+    const toTs = dateTo ? new Date(dateTo + "T23:59:59").getTime() : null;
     return rows.filter(({ unit, blockName, precinct, blockId }) => {
       // Precinct filter
       if (filterPrecinct !== "all" && precinct !== filterPrecinct) return false;
@@ -131,10 +135,16 @@ function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConduct
         const t = parseDmy(getDate(unit));
         return t >= now && t <= wk;
       }
+      if (filter === "custom") {
+        const t = parseDmy(getDate(unit));
+        if (fromTs !== null && t < fromTs) return false;
+        if (toTs !== null && t > toTs) return false;
+        return true;
+      }
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filter, search, filterPrecinct, filterBlockId, mode]);
+  }, [rows, filter, search, filterPrecinct, filterBlockId, dateFrom, dateTo, mode]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -337,7 +347,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
 
           {/* Date-range pills */}
           <Filter className="h-3 w-3 text-muted-foreground" />
-          {(["all", "today", "week", "unassigned"] as const).map((f) => (
+          {(["all", "today", "week", "unassigned", "custom"] as const).map((f) => (
             <button
               key={f}
               onClick={() => { setFilter(f); setPage(1); }}
@@ -356,6 +366,8 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                 setFilterPrecinct("all");
                 setFilterBlockId("all");
                 setFilter("all");
+                setDateFrom("");
+                setDateTo("");
                 setPage(1);
               }}
               className="ml-auto text-[11px] text-muted-foreground underline hover:text-foreground"
@@ -364,6 +376,39 @@ ${filtered.map(({ blockName, unit }) => `<tr>
             </button>
           )}
         </div>
+
+        {/* Custom date range pickers */}
+        {filter === "custom" && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-dashed bg-muted/10 px-3 py-2">
+            <span className="text-[11px] font-medium text-muted-foreground">Date range:</span>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[11px] text-muted-foreground">From</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                className="h-7 w-36 text-xs"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <label className="text-[11px] text-muted-foreground">To</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                className="h-7 w-36 text-xs"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo(""); setPage(1); }}
+                className="text-[11px] text-muted-foreground underline hover:text-foreground"
+              >
+                Clear dates
+              </button>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent>
