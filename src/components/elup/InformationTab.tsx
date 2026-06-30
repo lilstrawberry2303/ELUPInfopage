@@ -11,7 +11,7 @@ const LANG_PRIMARY: Record<InfoLanguage, string> = {
   en: "en-SG",
   ms: "ms-SG",
   zh: "zh-CN",
-  ta: "ta-IN",  // ta-SG does not exist in any browser; ta-IN is the only shipped Tamil voice
+  ta: "ta-IN",
 };
 
 // Ordered locale prefixes to try when searching available voices.
@@ -20,7 +20,7 @@ const LANG_VOICE_PRIORITY: Record<InfoLanguage, string[]> = {
   en: ["en-SG", "en-GB", "en-US", "en-AU", "en"],
   ms: ["ms-SG", "ms-MY", "ms"],
   zh: ["zh-CN", "zh-TW", "zh-HK", "zh"],
-  ta: ["ta-SG", "ta-IN", "ta"],   // ta-SG tried first in case future browsers add it
+  ta: ["ta-IN", "ta"],
 };
 
 function findVoice(lang: InfoLanguage): SpeechSynthesisVoice | null {
