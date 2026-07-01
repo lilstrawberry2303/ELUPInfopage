@@ -391,16 +391,17 @@ function SurveyForm({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-base">
-          <div className="flex items-center gap-2">
+        <CardTitle className="flex items-start justify-between text-base">
+          <div className="flex flex-col items-start gap-1">
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="-ml-2 h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
+              size="icon"
+              className="-ml-2 -mt-1 h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700"
               onClick={onExit}
+              aria-label="Exit survey"
             >
-              <ArrowLeft className="h-4 w-4" /> Exit
+              <X className="h-5 w-5" />
             </Button>
             <span>{formatUnit(u.floor, u.unitNo)}</span>
           </div>
