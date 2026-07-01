@@ -29,9 +29,9 @@ import { HOUR_OPTIONS } from "@/lib/elup/slots";
 import { uploadSignatureFile } from "@/lib/firebase";
 import { PhotoUploader } from "./PhotoUploader";
 import { DocumentUploader } from "./DocumentUploader";
-import type {
-  UnitData, GateType, DoorFrameCondition, MainDoorType,
-  ElectDBBoxLocation, WallCondition, CeilingCondition, CustomSurveyField, UnitActivityEntry,
+import {
+  formatUnit, type UnitData, type GateType, type DoorFrameCondition, type MainDoorType,
+  type ElectDBBoxLocation, type WallCondition, type CeilingCondition, type CustomSurveyField, type UnitActivityEntry,
 } from "@/lib/elup/types";
 
 function activityLabel(type: UnitActivityEntry["type"]): string {
@@ -255,7 +255,7 @@ export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
       .map((p) => `<img src="${p}" style="width:120px;height:90px;object-fit:cover;border:1px solid #ccc;border-radius:4px;" />`).join("");
 
     const html = `<!DOCTYPE html>
-<html><head><title>ELUP Unit Report — ${block.name} #${u.floor}-${u.unitNo}</title>
+<html><head><title>ELUP Unit Report — ${block.name} ${formatUnit(u.floor, u.unitNo)}</title>
 <style>
   body{font-family:sans-serif;font-size:12px;padding:24px;color:#111}
   h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;font-weight:600;margin:16px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
@@ -266,7 +266,7 @@ export function UnitDrawer({ unitKey, onClose, readOnly = false }: Props) {
   @media print{body{padding:0}button{display:none}}
 </style></head><body>
 <h1>ELUP Unit Survey Report</h1>
-<div class="meta">${block.name} · #${u.floor}-${u.unitNo} · Lobby ${u.lobby} · ${block.precinct}<br/>Generated: ${new Date().toLocaleString()}</div>
+<div class="meta">${block.name} · ${formatUnit(u.floor, u.unitNo)} · Lobby ${u.lobby} · ${block.precinct}<br/>Generated: ${new Date().toLocaleString()}</div>
 ${u.resident ? `<h2>Resident</h2><table><tr><td>Name</td><td>${u.resident.name}</td></tr><tr><td>Phone</td><td>${u.resident.phone}</td></tr></table>` : ""}
 <h2>CS Appointment</h2>
 <table><tr><td>Status</td><td>${u.csStatus}</td></tr>${u.csDate ? `<tr><td>Date</td><td>${u.csDate}</td></tr>` : ""}${u.csTime ? `<tr><td>Time</td><td>${u.csTime}</td></tr>` : ""}${u.csAssignee ? `<tr><td>Surveyor</td><td>${u.csAssignee}</td></tr>` : ""}</table>
@@ -299,7 +299,7 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                   </Badge>
                   <Badge variant="outline">Lobby {u.lobby}</Badge>
                 </div>
-                <SheetTitle className="text-2xl">#{u.floor}-{u.unitNo}</SheetTitle>
+                <SheetTitle className="text-2xl">{formatUnit(u.floor, u.unitNo)}</SheetTitle>
                 <SheetDescription>{block.name} — {block.precinct}</SheetDescription>
                 {!readOnly && (
                   <div className="pt-2">
@@ -664,7 +664,7 @@ ${u.optOutRequest ? `<h2>Opt-Out</h2><table><tr><td>Date</td><td>${u.optOutReque
                         <AlertDialogHeader>
                           <AlertDialogTitle>Remove this unit from the chart?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            #{u.floor}-{u.unitNo} will be hidden. You can re-add it later via Add Block.
+                            {formatUnit(u.floor, u.unitNo)} will be hidden. You can re-add it later via Add Block.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

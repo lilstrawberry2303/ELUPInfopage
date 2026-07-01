@@ -23,7 +23,7 @@ import {
   ChevronLeft, ChevronRight, Search, MapPin, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { UnitData } from "@/lib/elup/types";
+import { formatUnit, type UnitData } from "@/lib/elup/types";
 import { HOUR_OPTIONS, parseRange, hourlySlots, rangeOverlaps } from "@/lib/elup/slots";
 
 interface Row {
@@ -168,7 +168,7 @@ function AppointmentScheduler({ mode, onConductSurvey }: { mode: Mode; onConduct
           date: getDate(u)!,
           time: getTime(u)!,
           assignee: getAssignee(u),
-          label: `${b.name} #${u.floor}-${u.unitNo}`,
+          label: `${b.name} ${formatUnit(u.floor, u.unitNo)}`,
         })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -211,7 +211,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
   <td>${isCS ? (unit.csDate ?? "—") : (unit.cwDate ?? "—")}</td>
   <td>${isCS ? (unit.csTime ?? "—") : (unit.cwTime ?? "—")}</td>
   <td>${blockName}</td>
-  <td>#${unit.floor}-${unit.unitNo}</td>
+  <td>${formatUnit(unit.floor, unit.unitNo)}</td>
   <td>${unit.lobby}</td>
   <td>${isCS ? (unit.csAssignee ?? "—") : (unit.cwAssignee ?? "—")}</td>
 </tr>`).join("")}
@@ -265,8 +265,8 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                 blockId,
                 blockName,
                 precinct,
-                label: `${blockName} · #${u.floor}-${u.unitNo}`,
-                unitLabel: `#${u.floor}-${u.unitNo} · Lby ${u.lobby}`,
+                label: `${blockName} · ${formatUnit(u.floor, u.unitNo)}`,
+                unitLabel: `${formatUnit(u.floor, u.unitNo)} · Lby ${u.lobby}`,
               }))}
               onSave={({ blockId, unitKey, date, time, assignee, notes }) => {
                 const dateStr = fmtDmy(date);
@@ -437,7 +437,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                 </div>
                 <div className="flex w-32 flex-col">
                   <span className="font-medium text-xs">{blockName}</span>
-                  <span className="text-[11px] text-muted-foreground">#{unit.floor}-{unit.unitNo} · Lby {unit.lobby}</span>
+                  <span className="text-[11px] text-muted-foreground">{formatUnit(unit.floor, unit.unitNo)} · Lby {unit.lobby}</span>
                 </div>
                 <div className="flex flex-1 flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
                   <User className="h-3 w-3" />
@@ -478,7 +478,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                       assignee: getAssignee(unit) ?? "",
                       notes: getNotes(unit) ?? "",
                     }}
-                    unitOptions={[{ k: unitKey, blockId, label: `${blockName} · #${unit.floor}-${unit.unitNo}` }]}
+                    unitOptions={[{ k: unitKey, blockId, label: `${blockName} · ${formatUnit(unit.floor, unit.unitNo)}` }]}
                     lockUnit
                     onSave={({ date, time, assignee, notes }) => {
                       dispatch({
@@ -514,7 +514,7 @@ ${filtered.map(({ blockName, unit }) => `<tr>
                       <AlertDialogHeader>
                         <AlertDialogTitle>Cancel {mode} appointment?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This will unschedule {blockName} #{unit.floor}-{unit.unitNo} ({getDate(unit)} {getTime(unit)}).
+                          This will unschedule {blockName} {formatUnit(unit.floor, unit.unitNo)} ({getDate(unit)} {getTime(unit)}).
                           The unit will revert to pending.
                         </AlertDialogDescription>
                       </AlertDialogHeader>

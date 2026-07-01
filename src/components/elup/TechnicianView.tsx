@@ -13,7 +13,7 @@ import { Calendar, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, MapPi
 import { PhotoUploader } from "./PhotoUploader";
 import { syncUnit, logActivity } from "@/lib/firebase";
 import { toast } from "sonner";
-import type { UnitData } from "@/lib/elup/types";
+import { formatUnit, type UnitData } from "@/lib/elup/types";
 
 interface ApptEntry {
   blockId: string;
@@ -50,7 +50,7 @@ function ApptRow({
     >
       <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-bold leading-snug sm:text-sm">{blockName} #{u.floor}-{u.unitNo}</div>
+          <div className="text-[11px] font-bold leading-snug sm:text-sm">{blockName} {formatUnit(u.floor, u.unitNo)}</div>
           <div className="mt-0.5 text-[10px] text-muted-foreground sm:text-xs">{precinct} · Lobby {u.lobby}</div>
         </div>
         <span className="shrink-0 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 sm:text-xs">
@@ -303,7 +303,7 @@ export function TechnicianView() {
               <SelectContent className="max-h-72">
                 {conductUnits.map(([k, u]) => (
                   <SelectItem key={k} value={k}>
-                    #{(u as UnitData).floor}-{(u as UnitData).unitNo} · Lby {(u as UnitData).lobby}
+                    {formatUnit((u as UnitData).floor, (u as UnitData).unitNo)} · Lby {(u as UnitData).lobby}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -358,7 +358,7 @@ function WorkLogger({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
-          <span>{block.name} #{u.floor}-{u.unitNo}</span>
+          <span>{block.name} {formatUnit(u.floor, u.unitNo)}</span>
           <div className="flex items-center gap-2">
             <Badge className={emergency ? "bg-amber-500 hover:bg-amber-500" : "bg-orange-500 hover:bg-orange-500"}>
               {emergency ? "Unscheduled CW" : "Logging"}
@@ -414,7 +414,7 @@ function WorkLogger({
             }).catch((e) => toast.error("Firestore sync failed", { description: String(e?.message ?? e) }));
             logActivity(
               "CW_COMPLETED",
-              `Cable work completed for ${block.name} #${u.floor}-${u.unitNo}`,
+              `Cable work completed for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
               techName,
               { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
             ).catch(() => {});

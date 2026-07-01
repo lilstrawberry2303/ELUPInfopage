@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useElup, useActiveBlock } from "@/lib/elup/store";
+import { formatUnit } from "@/lib/elup/types";
 import { BlockChart } from "./BlockChart";
 import { UnitDrawer } from "./UnitDrawer";
 import { PrecinctFilter } from "./PrecinctFilter";
@@ -57,7 +58,7 @@ export function ClientView() {
               <div key={`${p.block.id}-${p.unitKey}`} className="rounded-lg border-2 border-yellow-300 bg-yellow-50 p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm font-semibold">{p.block.name} · #{p.unit.floor}-{p.unit.unitNo}</div>
+                    <div className="text-sm font-semibold">{p.block.name} · {formatUnit(p.unit.floor, p.unit.unitNo)}</div>
                     <div className="text-[11px] text-muted-foreground">Requested {p.unit.optOutRequest?.requestedDate}</div>
                   </div>
                   <FileSignature className="h-4 w-4 text-yellow-700" />

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { InformationTab } from "./InformationTab";
 import { toast } from "sonner";
+import { formatUnit } from "@/lib/elup/types";
 import type {
   GateType, DoorFrameCondition, MainDoorType, ElectDBBoxLocation,
   WallCondition, CeilingCondition,
@@ -123,7 +124,7 @@ export function SurveyorView() {
                     {/* Top row: time badge + unit number */}
                     <div className="flex items-start justify-between gap-1.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-bold leading-snug sm:text-sm">{block.name} #{u.floor}-{u.unitNo}</div>
+                        <div className="text-[11px] font-bold leading-snug sm:text-sm">{block.name} {formatUnit(u.floor, u.unitNo)}</div>
                         <div className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">Lobby {u.lobby}{u.csAssignee ? ` · ${u.csAssignee}` : ""}</div>
                       </div>
                       <span className="shrink-0 rounded bg-sky-100 dark:bg-sky-900/50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300 sm:text-xs">
@@ -171,7 +172,7 @@ export function SurveyorView() {
                     unitKey: selectedUnit,
                     patch: { csStatus: "completed", ...patch },
                   });
-                  toast.success(`Survey submitted for #${activeUnit.floor}-${activeUnit.unitNo}`, {
+                  toast.success(`Survey submitted for ${formatUnit(activeUnit.floor, activeUnit.unitNo)}`, {
                     description: "Form cleared. Ready for the next unit.",
                   });
                   setSelectedUnit(null);
@@ -301,7 +302,7 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
-          <span>#{u.floor}-{u.unitNo}</span>
+          <span>{formatUnit(u.floor, u.unitNo)}</span>
           <Badge variant="outline" className="bg-sky-50 text-sky-700">Condition Survey</Badge>
         </CardTitle>
       </CardHeader>
@@ -580,7 +581,7 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
                 }).catch((e) => toast.error("Firestore sync failed", { description: String(e?.message ?? e) }));
                 logActivity(
                   "CS_COMPLETED",
-                  `Condition survey completed for Blk ${block.name} #${u.floor}-${u.unitNo}`,
+                  `Condition survey completed for Blk ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
                   appState.user?.username ?? "surveyor",
                   { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
                 ).catch(() => {});
@@ -687,7 +688,7 @@ export function OptOutForm({ onSubmit }: { onSubmit: (blockId: string, unitKey: 
             <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
             <SelectContent className="max-h-72">
               {unitOpts.map(([k, u]) => (
-                <SelectItem key={k} value={k}>#{u.floor}-{u.unitNo} · Lby {u.lobby}</SelectItem>
+                <SelectItem key={k} value={k}>{formatUnit(u.floor, u.unitNo)} · Lby {u.lobby}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -829,7 +830,7 @@ function CableWorkScheduleDialog({
         date: u.cwDate,
         time: u.cwTime,
         assignee: u.cwAssignee,
-        label: `#${u.floor}-${u.unitNo}`,
+        label: formatUnit(u.floor, u.unitNo),
       }));
   }, [blockUnits, currentUnitKey]);
 

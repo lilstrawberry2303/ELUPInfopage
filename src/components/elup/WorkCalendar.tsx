@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Ban, CalendarClock, ChevronLeft, ChevronRight, X, Zap } from "lucide-react";
 import { toast } from "sonner";
-import type { BlockedDate } from "@/lib/elup/types";
+import { formatUnit, type BlockedDate } from "@/lib/elup/types";
 import { hourlySlots, parseRange, rangeOverlaps } from "@/lib/elup/slots";
 
 // ---- Date helpers ----
@@ -58,12 +58,12 @@ export function WorkCalendar() {
         if (!u.exists) return;
         if (u.csDate && (u.csStatus === "scheduled" || u.csStatus === "completed")) {
           if (!m.has(u.csDate)) m.set(u.csDate, { cs: [], cw: [] });
-          m.get(u.csDate)!.cs.push({ label: `${b.name} #${u.floor}-${u.unitNo}`, time: u.csTime ?? "" });
+          m.get(u.csDate)!.cs.push({ label: `${b.name} ${formatUnit(u.floor, u.unitNo)}`, time: u.csTime ?? "" });
         }
         if (u.cwDate && (u.cwStatus === "scheduled" || u.cwStatus === "in_progress" || u.cwStatus === "completed")) {
           if (!m.has(u.cwDate)) m.set(u.cwDate, { cs: [], cw: [] });
           m.get(u.cwDate)!.cw.push({
-            label:    `${b.name} #${u.floor}-${u.unitNo}`,
+            label:    `${b.name} ${formatUnit(u.floor, u.unitNo)}`,
             time:     u.cwTime ?? "",
             assignee: u.cwAssignee,
           });

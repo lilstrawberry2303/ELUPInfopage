@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useElup } from "@/lib/elup/store";
+import { formatUnit } from "@/lib/elup/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -132,7 +133,7 @@ export function OptOutRecords() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-semibold">
-                      {selectedBlock?.name} · #{u.floor}-{u.unitNo}
+                      {selectedBlock?.name} · {formatUnit(u.floor, u.unitNo)}
                       <span className="ml-2 text-xs text-muted-foreground">Lobby {u.lobby}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">Requested {req.requestedDate}</div>
@@ -186,7 +187,7 @@ export function OptOutRecords() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Revert opt-out?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will remove the opt-out record for unit <strong>#{u.floor}-{u.unitNo}</strong> and reset its CS and CW status back to <strong>Pending</strong>. This cannot be undone.
+                            This will remove the opt-out record for unit <strong>{formatUnit(u.floor, u.unitNo)}</strong> and reset its CS and CW status back to <strong>Pending</strong>. This cannot be undone.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

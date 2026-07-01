@@ -1,5 +1,10 @@
 export type Role = "manager" | "surveyor" | "technician" | "client";
 
+/** Format a unit number with a zero-padded floor: #05-174 */
+export function formatUnit(floor: number, unitNo: string): string {
+  return `#${String(floor).padStart(2, "0")}-${unitNo}`;
+}
+
 export type UnitStatus =
   | "pending"
   | "cs_scheduled"
