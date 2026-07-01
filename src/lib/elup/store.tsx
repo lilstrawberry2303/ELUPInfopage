@@ -8,7 +8,7 @@ import {
 } from "firebase/firestore";
 import { db, onboardUserWithAuth, uploadSignatureToStorage, saveOptOutRecord, saveSurveyConfig, saveBlockedDates, saveInfoPageContent, appendUnitActivity, appendCsReminder, removeCsReminder } from "@/lib/firebase";
 import type { Block, Role, Appointment, UnitData, Account, CustomSurveyField, DefaultSurveyGroup, BlockedDate, UnitActivityEntry, InfoPageContent } from "./types";
-import { DEFAULT_INFO_PAGE } from "./types";
+import { DEFAULT_INFO_PAGE, formatUnit } from "./types";
 
 function mkEntry(
   type: UnitActivityEntry["type"],
@@ -568,7 +568,7 @@ export function ElupProvider({ children, initialRole = "manager" }: { children: 
             await updateUnitStatus(meta.precinctId, appt.blockId, appt.unitKey, patch);
             await logActivity(
               appt.type === "CS" ? "CS_SCHEDULED" : "CW_SCHEDULED",
-              `${appt.type} appointment scheduled for unit ${appt.unitKey}`,
+              `${appt.type} appointment scheduled for ${prevBlock?.name ?? appt.blockId} ${prevUnit ? formatUnit(prevUnit.floor, prevUnit.unitNo) : appt.unitKey}`,
               "system",
               { blockId: appt.blockId, unitKey: appt.unitKey, date: appt.date },
             );

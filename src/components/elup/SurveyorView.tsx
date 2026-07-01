@@ -581,7 +581,7 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
                 }).catch((e) => toast.error("Firestore sync failed", { description: String(e?.message ?? e) }));
                 logActivity(
                   "CS_COMPLETED",
-                  `Condition survey completed for Blk ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
+                  `Condition survey completed for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
                   appState.user?.username ?? "surveyor",
                   { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
                 ).catch(() => {});
