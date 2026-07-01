@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   FileText, MapPin, Search, ClipboardCheck, FileSignature,
-  CalendarClock, ArrowRight, Zap, Upload, Loader2, X, Info, ClipboardList,
+  CalendarClock, ArrowRight, ArrowLeft, Zap, Upload, Loader2, X, Info, ClipboardList,
 } from "lucide-react";
 import { InformationTab } from "./InformationTab";
 import { toast } from "sonner";
@@ -259,6 +259,7 @@ export function SurveyorView() {
                   });
                   setSelectedUnit(null);
                 }}
+                onExit={() => setSelectedUnit(null)}
               />
             </div>
           )}
@@ -333,7 +334,13 @@ function CheckGroup<T extends string>({
   );
 }
 
-function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (patch: any) => void }) {
+function SurveyForm({
+  unitKey, onComplete, onExit,
+}: {
+  unitKey: string;
+  onComplete: (patch: any) => void;
+  onExit?: () => void;
+}) {
   const { state } = useElup();
   const { state: appState } = useApp();
   const block = useActiveBlock();
@@ -385,7 +392,18 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between text-base">
-          <span>{formatUnit(u.floor, u.unitNo)}</span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
+              onClick={onExit}
+            >
+              <ArrowLeft className="h-4 w-4" /> Exit
+            </Button>
+            <span>{formatUnit(u.floor, u.unitNo)}</span>
+          </div>
           <Badge variant="outline" className="bg-sky-50 text-sky-700">Condition Survey</Badge>
         </CardTitle>
       </CardHeader>
