@@ -517,13 +517,10 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
           <SignatureCanvas onChange={setResidentSignature} />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" onClick={() => toast.info("CS Form PDF generated")}>
-            <FileText className="mr-1 h-4 w-4" /> CS Form
-          </Button>
+        <div>
           <Button
-            className="bg-sky-600 hover:bg-sky-700"
-            disabled={!residentSignature || submitting}
+            className="bg-sky-600 hover:bg-sky-700 w-full"
+            disabled={submitting}
             onClick={async () => {
               setSubmitting(true);
               try {
@@ -534,13 +531,15 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
                     })()
                   : undefined;
                 let residentSigUrl = residentSignature;
-                try {
-                  residentSigUrl = await uploadSignatureToStorage(
-                    residentSignature,
-                    `surveys/${block.precinctId}/${block.id}/${unitKey}/resident`,
-                  );
-                } catch (e) {
-                  console.warn("[cs] resident sig upload failed, using data URL", e);
+                if (residentSignature) {
+                  try {
+                    residentSigUrl = await uploadSignatureToStorage(
+                      residentSignature,
+                      `surveys/${block.precinctId}/${block.id}/${unitKey}/resident`,
+                    );
+                  } catch (e) {
+                    console.warn("[cs] resident sig upload failed, using data URL", e);
+                  }
                 }
                 const patch: any = {
                   resident: ownerName ? { name: ownerName, phone: ownerPhone } : undefined,
@@ -585,6 +584,14 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
                   appState.user?.username ?? "surveyor",
                   { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
                 ).catch(() => {});
+                if (cwDmy) {
+                  logActivity(
+                    "CW_SCHEDULED",
+                    `CW appointment scheduled for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
+                    appState.user?.username ?? "surveyor",
+                    { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby, date: cwDmy },
+                  ).catch(() => {});
+                }
                 onComplete(patch);
                 clearCsDraft(block.precinctId, block.id, unitKey).catch(() => {});
               } finally {
