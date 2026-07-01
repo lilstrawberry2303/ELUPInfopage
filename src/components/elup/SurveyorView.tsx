@@ -21,8 +21,13 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   FileText, MapPin, Search, ClipboardCheck, FileSignature,
-  CalendarClock, ArrowRight, Zap, Upload, Loader2, X, Info,
+  CalendarClock, ArrowRight, Zap, Upload, Loader2, X, Info, ClipboardList,
 } from "lucide-react";
 import { InformationTab } from "./InformationTab";
 import { toast } from "sonner";
@@ -39,12 +44,34 @@ function todayDmy() {
 }
 
 export function SurveyorView() {
-  const { dispatch } = useElup();
+  const { state, dispatch } = useElup();
   const block = useActiveBlock();
   const [search, setSearch] = useState("");
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [drawerUnit, setDrawerUnit] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("survey");
+
+  // Manual unit selection (walk-in / unscheduled)
+  const [manualPrecinct, setManualPrecinct] = useState("");
+  const [manualBlockId, setManualBlockId] = useState("");
+  const [manualUnitKey, setManualUnitKey] = useState("");
+
+  const precincts = useMemo(
+    () => [...new Set(state.blocks.map((b) => b.precinct))].sort(),
+    [state.blocks],
+  );
+  const manualBlocks = useMemo(
+    () => state.blocks.filter((b) => b.precinct === manualPrecinct),
+    [state.blocks, manualPrecinct],
+  );
+  const manualBlock = useMemo(
+    () => state.blocks.find((b) => b.id === manualBlockId) ?? null,
+    [state.blocks, manualBlockId],
+  );
+  const manualUnits = useMemo(
+    () => (manualBlock ? Object.entries(manualBlock.units).filter(([, u]) => u.exists) : []),
+    [manualBlock],
+  );
 
   const filtered = Object.entries(block.units)
     .filter(([, u]) => u.exists)
@@ -159,6 +186,61 @@ export function SurveyorView() {
 
             </CardContent>
           </Card>
+
+          {/* Manual / walk-in survey selection */}
+          {!selectedUnit && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="h-4 w-4 text-sky-500" /> Conduct Survey
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">Select a unit to start a survey without an appointment.</p>
+                <div className="space-y-2">
+                  <Select value={manualPrecinct} onValueChange={(v) => { setManualPrecinct(v); setManualBlockId(""); setManualUnitKey(""); }}>
+                    <SelectTrigger className="text-xs"><SelectValue placeholder="Select precinct" /></SelectTrigger>
+                    <SelectContent>
+                      {precincts.map((p) => <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={manualBlockId} onValueChange={(v) => { setManualBlockId(v); setManualUnitKey(""); }} disabled={!manualPrecinct}>
+                    <SelectTrigger className="text-xs"><SelectValue placeholder="Select block" /></SelectTrigger>
+                    <SelectContent>
+                      {manualBlocks.map((b) => <SelectItem key={b.id} value={b.id} className="text-xs">{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={manualUnitKey} onValueChange={setManualUnitKey} disabled={!manualBlockId}>
+                    <SelectTrigger className="text-xs"><SelectValue placeholder="Select unit" /></SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {manualUnits.map(([k, u]) => (
+                        <SelectItem key={k} value={k} className="text-xs">
+                          {formatUnit(u.floor, u.unitNo)} · Lby {u.lobby}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  className="w-full bg-sky-600 hover:bg-sky-700"
+                  disabled={!manualBlockId || !manualUnitKey}
+                  onClick={() => {
+                    dispatch({ type: "SET_BLOCK", blockId: manualBlockId });
+                    setSelectedUnit(manualUnitKey);
+                    setManualPrecinct("");
+                    setManualBlockId("");
+                    setManualUnitKey("");
+                    setTimeout(
+                      () => document.getElementById("cs-survey-form")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                      80,
+                    );
+                  }}
+                >
+                  <ClipboardCheck className="mr-1.5 h-4 w-4" /> Start Survey
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {activeUnit && selectedUnit && (
             <div id="cs-survey-form">
@@ -282,6 +364,7 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
   const [scheduledCableWorkTechnician, setScheduledCableWorkTechnician] = useState(draft?.scheduledCableWorkTechnician ?? "");
   const [residentSignature, setResidentSignature] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [customValues, setCustomValues] = useState<Record<string, string | boolean | string[]>>(draft?.customValues ?? {});
   const _mounted = useRef(false);
   useEffect(() => {
@@ -521,88 +604,116 @@ function SurveyForm({ unitKey, onComplete }: { unitKey: string; onComplete: (pat
           <Button
             className="bg-sky-600 hover:bg-sky-700 w-full"
             disabled={submitting}
-            onClick={async () => {
-              setSubmitting(true);
-              try {
-                const cwDmy = scheduledCableWorkDate
-                  ? (() => {
-                      const d = new Date(scheduledCableWorkDate);
-                      return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
-                    })()
-                  : undefined;
-                let residentSigUrl = residentSignature;
-                if (residentSignature) {
-                  try {
-                    residentSigUrl = await uploadSignatureToStorage(
-                      residentSignature,
-                      `surveys/${block.precinctId}/${block.id}/${unitKey}/resident`,
-                    );
-                  } catch (e) {
-                    console.warn("[cs] resident sig upload failed, using data URL", e);
-                  }
-                }
-                const patch: any = {
-                  resident: ownerName ? { name: ownerName, phone: ownerPhone } : undefined,
-                  survey: {
-                    existingLoadAmps: amps,
-                    condition,
-                    notes,
-                    photos,
-                    ownerName,
-                    ownerPhone,
-                    surveyDateTime,
-                    gateTypes,
-                    doorFrame,
-                    mainDoor,
-                    electDBBox,
-                    wall,
-                    ceiling,
-                    scheduledCableWorkDate: cwDmy,
-                    scheduledCableWorkTime: cwDmy ? scheduledCableWorkTime : undefined,
-                    residentSignature: residentSigUrl,
-                    custom: customValues,
-                  },
-                };
-                if (cwDmy) {
-                  patch.cwStatus = "scheduled";
-                  patch.cwDate = cwDmy;
-                  patch.cwTime = scheduledCableWorkTime;
-                  if (scheduledCableWorkTechnician) patch.cwAssignee = scheduledCableWorkTechnician;
-                }
-                await syncUnit(block.precinctId, block.id, unitKey, {
-                  blockId: block.id,
-                  unitKey,
-                  unitNo: u.unitNo,
-                  floor: u.floor,
-                  lobby: u.lobby,
-                  csStatus: "completed",
-                  ...patch,
-                }).catch((e) => toast.error("Firestore sync failed", { description: String(e?.message ?? e) }));
-                logActivity(
-                  "CS_COMPLETED",
-                  `Condition survey completed for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
-                  appState.user?.username ?? "surveyor",
-                  { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
-                ).catch(() => {});
-                if (cwDmy) {
-                  logActivity(
-                    "CW_SCHEDULED",
-                    `CW appointment scheduled for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
-                    appState.user?.username ?? "surveyor",
-                    { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby, date: cwDmy },
-                  ).catch(() => {});
-                }
-                onComplete(patch);
-                clearCsDraft(block.precinctId, block.id, unitKey).catch(() => {});
-              } finally {
-                setSubmitting(false);
-              }
-            }}
+            onClick={() => setConfirmOpen(true)}
           >
             <ClipboardCheck className="mr-1 h-4 w-4" />
             {submitting ? "Uploading..." : "Submit Survey"}
           </Button>
         </div>
+
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Submit survey for {formatUnit(u.floor, u.unitNo)}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {block.name} · Lobby {u.lobby}
+                {scheduledCableWorkDate && (
+                  <span className="mt-1 block text-orange-600 font-medium">
+                    Cable work will also be scheduled on this submission.
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={submitting}
+                className="bg-sky-600 hover:bg-sky-700"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  setSubmitting(true);
+                  try {
+                    const cwDmy = scheduledCableWorkDate
+                      ? (() => {
+                          const d = new Date(scheduledCableWorkDate);
+                          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(-2)}`;
+                        })()
+                      : undefined;
+                    let residentSigUrl = residentSignature;
+                    if (residentSignature) {
+                      try {
+                        residentSigUrl = await uploadSignatureToStorage(
+                          residentSignature,
+                          `surveys/${block.precinctId}/${block.id}/${unitKey}/resident`,
+                        );
+                      } catch (e) {
+                        console.warn("[cs] resident sig upload failed, using data URL", e);
+                      }
+                    }
+                    const patch: any = {
+                      resident: ownerName ? { name: ownerName, phone: ownerPhone } : undefined,
+                      survey: {
+                        existingLoadAmps: amps,
+                        condition,
+                        notes,
+                        photos,
+                        ownerName,
+                        ownerPhone,
+                        surveyDateTime,
+                        gateTypes,
+                        doorFrame,
+                        mainDoor,
+                        electDBBox,
+                        wall,
+                        ceiling,
+                        scheduledCableWorkDate: cwDmy,
+                        scheduledCableWorkTime: cwDmy ? scheduledCableWorkTime : undefined,
+                        residentSignature: residentSigUrl,
+                        custom: customValues,
+                      },
+                    };
+                    if (cwDmy) {
+                      patch.cwStatus = "scheduled";
+                      patch.cwDate = cwDmy;
+                      patch.cwTime = scheduledCableWorkTime;
+                      if (scheduledCableWorkTechnician) patch.cwAssignee = scheduledCableWorkTechnician;
+                    }
+                    await syncUnit(block.precinctId, block.id, unitKey, {
+                      blockId: block.id,
+                      unitKey,
+                      unitNo: u.unitNo,
+                      floor: u.floor,
+                      lobby: u.lobby,
+                      csStatus: "completed",
+                      ...patch,
+                    }).catch((err) => toast.error("Firestore sync failed", { description: String(err?.message ?? err) }));
+                    logActivity(
+                      "CS_COMPLETED",
+                      `Condition survey completed for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
+                      appState.user?.username ?? "surveyor",
+                      { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby },
+                    ).catch(() => {});
+                    if (cwDmy) {
+                      logActivity(
+                        "CW_SCHEDULED",
+                        `CW appointment scheduled for ${block.name} ${formatUnit(u.floor, u.unitNo)}`,
+                        appState.user?.username ?? "surveyor",
+                        { blockId: block.id, unitKey, unitNo: u.unitNo, floor: u.floor, lobby: u.lobby, date: cwDmy },
+                      ).catch(() => {});
+                    }
+                    setConfirmOpen(false);
+                    onComplete(patch);
+                    clearCsDraft(block.precinctId, block.id, unitKey).catch(() => {});
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                {submitting ? <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Submitting…</> : "Confirm & Submit"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
